@@ -1,4 +1,4 @@
-yawff installation instructions
+sixaxff installation instructions
 ===============================
 
 Requirements (finish this)
@@ -13,7 +13,7 @@ Requirements (finish this)
 Installation
 ------------
 
-yawff:
+sixaxff:
  make clean
  make 
  make install

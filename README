@@ -1,27 +1,25 @@
-yawff (yaw force-feedback)
-==========================
+sixaxff (six axis force-feedback)
+=================================
 
-Note, yawff is still under development and is not yet fully
+Note, sixaxff is still under development and is not yet fully
 functional.
 
-Provides provides hard real-time control of dynamically scaled two
-winged flapping robotic model w/ force (or torque) feedback around the
-yaw axis. Designed for studying the dynamics turns about the yaw axis
-for flapping flight. More specifically this software controls a two
-wing robot where each wing of the robot has 3 degrees of freedom and
-can be programed to track arbitrary kinematics. During a kinematic
-outscan the moment about the yaw axis is measured via a torque sensor
-and used to determine the velocity of the yaw axis motor via a dynamic
-model.
+Provides provides hard real-time control of dynamically scaled two winged
+flapping robotic model w/ force (or torque) feedback around two axes. Designed
+for studying the dynamics of flapping flight. More specifically this software
+controls a two wing robot where each wing of the robot has 3 degrees of freedom
+and can be programed to track arbitrary kinematics. During a kinematic outscan
+the forces and moments are measured using a six axis sensor. The measured
+forces and moments are used for force feedback with repect to two of the robots
+axes via a dynamic model.
 
+sixaxff consists of two main components
 
-yawff consists of two main components
-
-* yawff: a shared library providing RTAI based hadr real-time control
+* sixaxff: a shared library providing RTAI based hard real-time control
   of a dynamically scaled two wing flapping robotic model w/ force
-  feedback about the yaw axis. 
+  feedback.
 
-* py_yawff: a python ctypes wrapper providing access to the yawff
+* py_sixaxff: a python ctypes wrapper providing access to the sixaxff
   library from python.
 
 Installation
@@ -33,5 +31,5 @@ Author
  * Will Dickson <wbd@caltech.edu>
 
 
-yawff may be freely distributed and modified in accordance with
+sixaxff may be freely distributed and modified in accordance with
 the GNU Lesser General Public License.
