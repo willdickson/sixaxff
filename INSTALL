@@ -1,0 +1,21 @@
+yawff installation instructions
+===============================
+
+Requirements (finish this)
+------------
+
+* RTAI (version ?)
+* comedi (version ?)
+* comedilib (version ?)
+* cunit
+
+
+Installation
+------------
+
+yawff:
+ make clean
+ make 
+ make install
+
+

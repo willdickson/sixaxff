@@ -1,0 +1,17 @@
+pylibyawff
+==========
+
+pylibyawff is a python wrapper for the yawff c library which provides
+hard real-time control of dynamically scaled two winged flapping
+robotic model w/ force (or torque) feedback around the yaw axis.
+
+Installation
+
+  * Installation instructions can be found in the INSTALL file.
+
+Author
+
+  * Will Dickson (wbd@caltech.edu)
+
+pylibyawff may be freely distributed and modified in accordance with
+the GNU Lesser General Public License.

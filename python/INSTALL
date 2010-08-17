@@ -1,0 +1,25 @@
+pylibsixaxwff Installation instructions 
+=======================================
+
+Requirements: 
+-------------
+yawff version 1.0
+qarray version 0.1
+move_motor version 0.1
+
+Installation:
+-------------
+
+The package uses the Python setuptools, so you can build it by calling
+
+  python setup.py build
+
+and install it by calling
+
+  python setup.py install
+
+which installs the package on your system.  
+
+See the "Installing Python Modules" manual inside your Python
+documentation or at http://docs.python.org/inst/inst.html if you want
+to customize the build process or the target location.

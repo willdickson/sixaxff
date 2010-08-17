@@ -1,0 +1,11 @@
+syntax: glob
+*.pyc
+*~
+*.o
+*.egg-info
+*.so.*
+*.egg
+*.swp
+*.pkl
+test-yawff
+devel-yawff
