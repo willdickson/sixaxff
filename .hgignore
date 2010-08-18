@@ -7,5 +7,5 @@ syntax: glob
 *.egg
 *.swp
 *.pkl
-test-yawff
-devel-yawff
+test-sixaxff
+devel-sixaxff

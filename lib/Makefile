@@ -34,8 +34,25 @@ LIBRARY_NAME=sixaxff
 MINOR_NUM=1
 RELEASE_NUM=0.1
 INSTALL_DIR=/usr/local/lib
+ATIDAQ_SRC_DIR=../atidaq/src
+ATIDAQ_INC_DIR=../atidaq/include/
 
-SRC=${LIBRARY_NAME}.c check.c util.c test-util.c
+vpath %.c ./
+vpath %.c $(ATIDAQ_SRC_DIR) 
+vpath %.h ./
+vpath %.h $(ATIDAQ_INC_DIR) 
+
+SRC=${LIBRARY_NAME}.c check.c util.c test-util.c sixax.c\
+		ftconfig.c \
+		ftrt.c \
+		dom.c \
+		expatls.c \
+	 	node.c \
+		stack.c \
+		xmlparse.c \
+		xmlrole.c \
+		xmltok.c
+
 OBJ=${SRC:.c=.o} 
 TARGET=lib${LIBRARY_NAME}.so.${MINOR_NUM}
 
@@ -43,7 +60,8 @@ CC= $(shell rtai-config --cc)
 LXRT_CFLAGS= $(shell rtai-config --lxrt-cflags)
 LXRT_LDFLAGS= $(shell rtai-config --lxrt-ldflags)
 TEST_LDFLAGS= -lcunit
-INCLUDES= -I 
+#INCLUDES= -I  
+LOCAL_INCLUDES= -iquote${ATIDAQ_INC_DIR}
 CFLAGS= -fPIC -c
 CSTANDARD= -std=gnu89
 DARRICK=-D ARRICK
@@ -51,16 +69,16 @@ DARRICK=-D ARRICK
 all: $(TARGET) test devel
 
 $(TARGET): $(OBJ)
-	${CC} -shared -W1,-soname,$@ -o $@.$(RELEASE_NUM) $? -lm $(LXRT_LDFLAGS)
+	${CC} -shared -W1,-soname,$@ -o $@.$(RELEASE_NUM) $? -lm $(LXRT_LDFLAGS) 
 
 $(OBJ): $(SRC)	
-	$(CC) $(CSTANDARD) $(CFLAGS) $(LXRT_CFLAGS) $(DARRICK) $?  
+	$(CC) $(CSTANDARD) $(CFLAGS) $(LOCAL_INCLUDES) $(LXRT_CFLAGS) $(DARRICK) $?  
 
 test: $(SRC) test-$(LIBRARY_NAME).c
-	$(CC) $(CSTANDARD) $(LXRT_CFLAGS) $(DARRICK) $? -o test-$(LIBRARY_NAME) $(TEST_LDFLAGS) -lm $(LXRT_LDFLAGS)
+	$(CC) $(CSTANDARD) $(LOCAL_INCLUDES) $(LXRT_CFLAGS) $(DARRICK) $? -o test-$(LIBRARY_NAME) $(TEST_LDFLAGS) -lm $(LXRT_LDFLAGS)
 
 devel: $(SRC) devel-$(LIBRARY_NAME).c
-	$(CC) $(CSTANDARD) $(LXRT_CFLAGS) $(DARRICK) $? -o devel-$(LIBRARY_NAME) $(TEST_LDFLAGS) -lm $(LXRT_LDFLAGS)
+	$(CC) $(CSTANDARD) $(LOCAL_INCLUDES) $(LXRT_CFLAGS) $(DARRICK) $? -o devel-$(LIBRARY_NAME) $(TEST_LDFLAGS) -lm $(LXRT_LDFLAGS)
 
 .PHONY: clean install uninstall
 

@@ -36,6 +36,9 @@
 #include "util.h"
 #include "test-util.h"
 
+#include "sixax.h"
+#include "ftconfig.h"
+
 int main(int argc, char *argv[])
 {
   array_t kine;
@@ -43,6 +46,32 @@ int main(int argc, char *argv[])
   data_t data;
   int end_pos[MAX_MOTOR];
   int ret_val;
+
+  // Test six axis sensor calibration stuff
+  int i;
+  Calibration *cal = NULL;
+  char cal_file_path[] = "FT8652.cal";
+  float tool_trans[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+  float sample[6] = {1.0, 2.0, 3.0, 4.0, 5.0, 6.0};
+  float ft[6]; 
+
+  sixax_init_cal(&cal,cal_file_path,tool_trans);
+  sixax_print_calinfo(cal);
+
+  sixax_sample2ft(cal,sample,ft);
+  printf("ft\n");
+  for (i=0; i<6; i++) {
+      printf("%13.5e ", ft[i]);
+  }
+  printf("\n");
+
+
+  float bias[6]={1.0,2.0,3.0,4.0,5.0,6.0};
+  sixax_set_bias(cal,bias);
+  sixax_print_calinfo(cal);
+  sixax_free_cal(cal);
+  // 
+
 
   // Initialize 
   init_test_config(&config);
