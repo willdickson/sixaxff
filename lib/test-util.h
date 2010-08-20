@@ -37,37 +37,33 @@
 #define DEV0_NAME "/dev/comedi0"
 #define DEV1_NAME "/dev/comedi1"
 #define AIN_DEV 1
-#define DIO_DEV 0
 #define AIN_SUBDEV 0
+#define AIN_ZERO_NUM 500
+#define AIN_ZERO_DT 0.01
+#define AIN_FILT_LPCUT 2.0
+#define CAL_FILE_PATH "FT8652.cal"
+#define DIO_DEV 0
 #define DIO_SUBDEV 2
-#define NUM_MOTOR 7
-#define YAW_MOTOR 6
-#define DIO_CLK {0,2,4,6,8,10,12}
-#define DIO_DIR {1,3,5,7,9,11,13}
-#define DIO_DISABLE 23
-#define KINE_MAP {0,1,2,3,4,5}
-#define YAW_AIN 0
-#define YAW_AIN_ZERO_DT 0.01
-#define YAW_AIN_ZERO_NUM 500
-#define YAW_VOLT2TORQ 1.0
-#define YAW_INERTIA 1.0
-#define YAW_IND2DEG 1.5
-#define YAW_TORQ_LIM 0.5
-#define YAW_TORQ_DEADBAND 5.0
-#define YAW_FILT_LPCUT 2.0
-#define YAW_FILT_HPCUT 0.01
-#define YAW_DAMPING 0.0
+#define DIO_CLK {0,2,4,6,8,10,12,14}
+#define DIO_DIR {1,3,5,7,9,11,13,15}
+#define KINE_MAP {0,1,2,3,4,5,6,7}
+#define KINE_LABEL {"rotation_0", "deviation_0", "deviation_1", "rotation_1", "stroke_0", "stroke_1", "pitch", "translation"}
+#define NUM_MOTOR 8
+#define FF_FT {0,5}
+#define FF_TOOLTRANS {0.0, 0.0, 0.0, 0.0, 0.0, 0.0}
+#define FF_MOTOR {6,7}
+#define FF_MASS {1.0, 2.0}
+#define FF_IND2UNIT {1.5, 2.5}
+#define FF_AXESUNITS {"rad", "m"}
+#define FF_DAMPING {0.0, 0.1}
+#define FF_FLAG {FF_ON, FF_ON}
+#define FF_INTEG_TYPE INTEG_RKUTTA
 #define DT_NS 300000
 #define STARTUP_T 0.0
 
 //// Kinematics test parameters
 #define KINE_NROW 50000
 #define KINE_NCOL NUM_MOTOR
-//#define KINE_PERIOD 6.0
-//#define KINE_STROKE_AMP 70.0
-//#define KINE_ROTATION_AMP 45.0
-//#define KINE_STROKE_K 0.01
-//#define KINE_ROTATION_K 1.5
 
 // Filter test parameters
 #define NUM_CYCLE  50

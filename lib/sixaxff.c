@@ -71,9 +71,9 @@ typedef struct {
 typedef struct {
   int ind;
   double t;
-  float pos;
-  float vel;
-  float torq;
+  float pos[NUM_FF];
+  float vel[NUM_FF];
+  float ft[NUM_FF];
   int motor_ind[MAX_MOTOR];
   int running;
   int err_flag;
@@ -136,13 +136,18 @@ int sixaxff(array_t kine, config_t config, data_t data, int end_pos[])
   printf("                  Starting sixaxff \n");
   printf("=======================================================\n");
 
+  /*
+
   // Check inputs
   fflush_printf("checking input args\n");
   if (check_sixaxff_input(kine,config,data) != SUCCESS) {
     PRINT_ERR_MSG("bad input data");
     return FAIL;
   }
+  */
   print_config(config);
+
+  /*
 
   // Setup SIGINT handler
   fflush_printf("reassigning SIGINT handler\n");
@@ -245,6 +250,7 @@ int sixaxff(array_t kine, config_t config, data_t data, int end_pos[])
     if (i!=config.num_motor-1) fflush_printf(", ");
   }
   fflush_printf("\n");
+  */
   
   // Temporary
   return rtn_flag;
@@ -266,6 +272,8 @@ int sixaxff(array_t kine, config_t config, data_t data, int end_pos[])
 // Return: void.
 //
 // ------------------------------------------------------------------
+
+/*
 static void *sixaxff_thread(void *args)
 {
   RT_TASK *rt_task=NULL;
@@ -425,6 +433,7 @@ static void *sixaxff_thread(void *args)
 
   return 0;
 }
+*/
 
 
 // -------------------------------------------------------------------
@@ -445,9 +454,11 @@ void init_status_vals(status_t *status)
   int i;
   status -> ind = 0;
   status -> t = 0.0;
-  status -> pos = 0.0;
-  status -> vel = 0.0;
-  status -> torq = 0.0;
+  for (i=0; i<NUM_FF; i++) {
+      (status -> pos)[i] = 0.0;
+      (status -> vel)[i] = 0.0;
+      (status -> ft)[i] = 0.0;
+  }
   status -> running = RT_STOPPED;
   status -> err_flag = 0;
   for (i=0; i<MAX_MOTOR; i++) {
@@ -492,6 +503,8 @@ void read_status(status_t *status_copy)
 // Return: void
 //
 // ---------------------------------------------------------------------
+
+/*
 void update_status(
     int i, 
     float t, 
@@ -542,6 +555,7 @@ void update_status(
   }
   return;
 }
+*/
 
 // ---------------------------------------------------------------------
 // Function: update_data
@@ -559,6 +573,8 @@ void update_status(
 // return: SUCCESS or FAIL
 //
 // --------------------------------------------------------------------- 
+
+/*
 int update_data(
     data_t data, 
     int ind, 
@@ -589,6 +605,7 @@ int update_data(
   }
   return SUCCESS;
 }
+*/
 
 
 // ---------------------------------------------------------------------
@@ -603,6 +620,8 @@ int update_data(
 // Return: SUCCESS or FAIL
 //
 // ---------------------------------------------------------------------
+
+/*
 int set_clks_lo(comedi_info_t comedi_info[], config_t config)
 {
   int rval;
@@ -622,6 +641,7 @@ int set_clks_lo(comedi_info_t comedi_info[], config_t config)
   }
   return SUCCESS;
 }
+*/
 
 // ---------------------------------------------------------------------
 // Function: update_motor
@@ -639,6 +659,8 @@ int set_clks_lo(comedi_info_t comedi_info[], config_t config)
 // Return: SUCCESS or FAIL
 //
 // ---------------------------------------------------------------------
+
+/*
 int update_motor(
     int motor_ind[][2], 
     comedi_info_t comedi_info[], 
@@ -684,6 +706,7 @@ int update_motor(
 
   return SUCCESS;
 }
+*/
 
 // ---------------------------------------------------------------------
 // Function: update_ind
@@ -704,6 +727,8 @@ int update_motor(
 // Return: SUCCESS or FAIL
 //
 // ---------------------------------------------------------------------
+
+/*
 int update_ind(
     int motor_ind[][2],
     array_t kine, 
@@ -743,15 +768,6 @@ int update_ind(
         state[0].pos = config.yaw_ind2deg*DEG2RAD*ind;
         state[1].pos = config.yaw_ind2deg*DEG2RAD*ind;
       }
-      // Check that yaw is within allowed range
-      if (state[0].pos > MAX_YAW)  {
-        PRINT_ERR_MSG("fabs(yaw position) > MAX_YAW");
-        return FAIL;
-      }
-      if (state[0].pos < MIN_YAW) {
-        PRINT_ERR_MSG("fabs(yaw position) < MIN_YAW");
-        return FAIL;
-      }
     }
     else { 
       // This is a wing motor
@@ -762,14 +778,13 @@ int update_ind(
         PRINT_ERR_MSG("problem accessing kine array");
         return FAIL;
       }
-
       kine_num += 1;
     } 
-
     motor_ind[motor_num][1] = ind;
   }
   return SUCCESS;
 }
+*/
 
 
 // ---------------------------------------------------------------------
@@ -786,6 +801,8 @@ int update_ind(
 // Return: void
 //  
 // ---------------------------------------------------------------------
+
+/*
 void init_ind(int motor_ind[][2], config_t config)
 {
   int i,j; 
@@ -797,6 +814,7 @@ void init_ind(int motor_ind[][2], config_t config)
   }
   return;
 }
+*/
 
 // ----------------------------------------------------------------------
 // Function: update_state
@@ -816,6 +834,8 @@ void init_ind(int motor_ind[][2], config_t config)
 // Return: SUCCESS or FAIL
 //
 // ---------------------------------------------------------------------- 
+
+/*
 int update_state(
     state_t *state, 
     double t,
@@ -873,21 +893,6 @@ int update_state(
   torq_info->raw = torq_raw;
   torq_info->highpass = torq_highpass;
 
-  // Check if torque is greater than torque limit and if so disable motor
-  if (fabsf(torq_filt) > config.yaw_torq_lim) {
-    rval = comedi_dio_config(
-        comedi_info[config.dio_dev].device, 
-        config.dio_subdev, 
-        config.dio_disable,
-        COMEDI_OUTPUT
-        );
-    if (rval != 1) {
-      PRINT_ERR_MSG("unable to disable yaw motor");
-    }
-    PRINT_ERR_MSG("yaw torque limit exceeded");
-    return FAIL;
-  }
-
   // Update dynamic state - only if force-feedback is turned on
   if (config.ff_flag == FF_ON) {
 
@@ -912,6 +917,7 @@ int update_state(
  
   return SUCCESS;
 }
+*/
 
 // ----------------------------------------------------------------------
 // Function: get_torq_zero
@@ -928,6 +934,8 @@ int update_state(
 // Return: SUCCESS or FAIL
 //
 // ----------------------------------------------------------------------
+
+/*
 int get_torq_zero(comedi_info_t comedi_info[], config_t config, float *torq_zero, float *torq_std)
 {
   float ain_zero;
@@ -948,6 +956,7 @@ int get_torq_zero(comedi_info_t comedi_info[], config_t config, float *torq_zero
 
   return SUCCESS;
 }
+*/
 
 // -----------------------------------------------------------------------
 // Function: get_ain_zero
@@ -964,6 +973,8 @@ int get_torq_zero(comedi_info_t comedi_info[], config_t config, float *torq_zero
 // Return: SUCCESS or FAIL
 //
 // -----------------------------------------------------------------------
+
+/*
 int get_ain_zero(comedi_info_t comedi_info[], config_t config, float *ain_zero, float *ain_std)
 {
   int i;
@@ -1012,6 +1023,7 @@ int get_ain_zero(comedi_info_t comedi_info[], config_t config, float *ain_zero, 
   
   return ret_flag;
 }
+*/
 
 // ------------------------------------------------------------------
 // Function: get_ain
@@ -1026,6 +1038,8 @@ int get_ain_zero(comedi_info_t comedi_info[], config_t config, float *ain_zero, 
 // Return: SUCCESS or FAIL
 //
 // ------------------------------------------------------------------
+
+/*
 int get_ain(comedi_info_t comedi_info[], config_t config, float *ain)
 {
   int rval;
@@ -1052,6 +1066,7 @@ int get_ain(comedi_info_t comedi_info[], config_t config, float *ain)
   }
   return SUCCESS;
 }
+*/
 
 // ------------------------------------------------------------------
 // Function: get_torq
@@ -1066,6 +1081,8 @@ int get_ain(comedi_info_t comedi_info[], config_t config, float *ain)
 // Return: SUCCESS or FAIL
 //
 // ------------------------------------------------------------------
+
+/*
 int get_torq(comedi_info_t comedi_info[], config_t config, float *torq)
 {
 
@@ -1078,6 +1095,7 @@ int get_torq(comedi_info_t comedi_info[], config_t config, float *torq)
   *torq = ain*config.yaw_volt2torq;
   return SUCCESS;
 }
+*/
 
 // ------------------------------------------------------------------
 // Function: init_comedi
@@ -1092,6 +1110,8 @@ int get_torq(comedi_info_t comedi_info[], config_t config, float *torq)
 // Return: SUCCESS or FAIL
 //
 // ------------------------------------------------------------------
+
+/*
 int init_comedi(comedi_info_t comedi_info[], config_t config)
 {
   int i;
@@ -1143,17 +1163,6 @@ int init_comedi(comedi_info_t comedi_info[], config_t config)
       ret_flag = FAIL;
     }
   } // End for i
-  // Set dio disable line to output
-  rval = comedi_dio_config(
-      comedi_info[dio_dev].device, 
-      config.dio_subdev, 
-      config.dio_disable,
-      COMEDI_OUTPUT
-      );
-  if (rval != 1) {
-    PRINT_ERR_MSG("unable to configure dio_disable");
-    ret_flag = FAIL;
-  }
 
   // Set all configured dio lines to DIO_LO
   fflush_printf("setting dio lines to DIO_LO\n");
@@ -1183,17 +1192,6 @@ int init_comedi(comedi_info_t comedi_info[], config_t config)
       ret_flag = FAIL;
     } 
   } // End for i
-  // Set dio_disable line to zero
-  rval = comedi_dio_write(
-      comedi_info[dio_dev].device,
-      config.dio_subdev,
-      config.dio_disable,
-      DIO_LO
-      );
-  if (rval != 1) {
-    PRINT_ERR_MSG("unable to set dio_disable to zero");
-    ret_flag = FAIL;
-  }
 
   // Get max data and krange for conversion to physical units
   comedi_info[ain_dev].maxdata = comedi_get_maxdata(
@@ -1215,6 +1213,8 @@ int init_comedi(comedi_info_t comedi_info[], config_t config)
   return ret_flag;
 }
 
+*/
+
 // ------------------------------------------------------------------
 // Function: rt_cleanup
 //
@@ -1232,6 +1232,8 @@ int init_comedi(comedi_info_t comedi_info[], config_t config)
 // Return: SUCCESS or FAIL
 //
 // ------------------------------------------------------------------
+
+/*
 int rt_cleanup(int level, comedi_info_t comedi_info[], RT_TASK *rt_task)
 {
   
@@ -1267,6 +1269,7 @@ int rt_cleanup(int level, comedi_info_t comedi_info[], RT_TASK *rt_task)
 
   return ret_flag;
 }
+*/
 
 // -------------------------------------------------------------------
 // Function: ain_to_phys
@@ -1283,6 +1286,8 @@ int rt_cleanup(int level, comedi_info_t comedi_info[], RT_TASK *rt_task)
 // Return: SUCCESS or FAIL
 //
 // -------------------------------------------------------------------
+
+/*
 int ain_to_phys(lsampl_t data, comedi_info_t comedi_info, float *volts)
 {
   float max_rng;
@@ -1306,7 +1311,7 @@ int ain_to_phys(lsampl_t data, comedi_info_t comedi_info, float *volts)
 
   return SUCCESS;
 }
-
+*/
 
 // -----------------------------------------------------------------
 // Function: reassign_sigint 
