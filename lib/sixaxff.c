@@ -136,15 +136,13 @@ int sixaxff(array_t kine, config_t config, data_t data, int end_pos[])
   printf("                  Starting sixaxff \n");
   printf("=======================================================\n");
 
-  /*
-
   // Check inputs
   fflush_printf("checking input args\n");
   if (check_sixaxff_input(kine,config,data) != SUCCESS) {
     PRINT_ERR_MSG("bad input data");
     return FAIL;
   }
-  */
+  
   print_config(config);
 
   /*

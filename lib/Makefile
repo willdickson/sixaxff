@@ -42,7 +42,7 @@ vpath %.c $(ATIDAQ_SRC_DIR)
 vpath %.h ./
 vpath %.h $(ATIDAQ_INC_DIR) 
 
-SRC=${LIBRARY_NAME}.c  util.c test-util.c sixax.c\
+SRC=${LIBRARY_NAME}.c check.c util.c test-util.c sixax.c\
 		ftconfig.c \
 		ftrt.c \
 		dom.c \

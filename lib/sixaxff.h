@@ -52,7 +52,6 @@ Author: Will Dickson
 #define NUM_COMEDI_DEV 2
 #define MAX_MOTOR 10
 #define MAX_DIO 23
-#define MAX_AIN 15
 #define ERR_SZ 200
 #define MAX_DT_NS 10000000   // 100 Hz 
 #define MIN_DT_NS 100000     // 10 kHz
@@ -77,6 +76,7 @@ Author: Will Dickson
 #define UNKNOWN_ARRAY 4    // Indicates array of unkown type
 
 #define AIN_ZERO_DT_MIN 0.0005   // Minimum allowed zeroing interval
+#define AIN_ZERO_NUM_MIN 10      // Minumum allosed number of zeroing samples
 #define AIN_RANGE 0              // Analog input range
 #define AIN_AREF AREF_DIFF       // Analog input reference
 
@@ -150,10 +150,10 @@ typedef struct {
 
 // Structure for force and torque data
 typedef struct {
-    float zero[6]; // Torque sensor zero
+    float zero[6]; // Sensor zero
     float std[6];  // Torque sensor standard deviation - from zeroing measurement
-    float last[6]; // Last filtered (both high and low pass) torque measurement (Nm)
-    float raw[6];  // Last raw torque measurement (Nm) 
+    float last[6]; // Last filtered force + torque measurement (N) or (Nm)
+    float raw[6];  // Last raw force + torque measurement (Nm) 
 } torq_info_t;
 
 // Six axis force-feedback function 
