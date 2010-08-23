@@ -31,8 +31,8 @@ functions definitions for the sixaxff library.
 
 Author: Will Dickson
 ---------------------------------------------------------------------- */
-#ifndef INC_YAWFF_H_
-#define INC_YAWFF_H_
+#ifndef INC_SIXAXFF_H_
+#define INC_SIXAXFF_H_
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -42,6 +42,7 @@ Author: Will Dickson
 #include <rtai_lxrt.h>
 #include <rtai_comedi.h>
 #include <signal.h>
+#include "sixax.h"
 
 #define TRUE 1
 #define FALSE 0
@@ -79,11 +80,11 @@ Author: Will Dickson
 #define AIN_ZERO_NUM_MIN 10      // Minumum allosed number of zeroing samples
 #define AIN_RANGE 0              // Analog input range
 #define AIN_AREF AREF_DIFF       // Analog input reference
-
+#define AIN_DELAY_NS 5000        // Delay in nano sec to allow analog inputs to settle
+                                 // when switching channels
+                                 
 #define RT_TASK_ERROR 2   // Mask used to detect if an error occured in the realtime thread
 #define RT_TASK_SIGINT 4  // Mask used to detect if an sigint stopped the realtime thread
-
-static const char *FT_NAMES[] = {"fx", "fy", "fz", "tx", "ty", "tz"};
 
 typedef void (*sighandler_t)(int);
 
@@ -131,6 +132,8 @@ typedef struct {
 typedef struct {
     float pos;       // Axis position (user units)
     float vel;       // Axis velocity (user units/s)
+    float pos_prev;
+    float vel_prev;
 } state_t;
 
 // Structure for return data
@@ -150,11 +153,18 @@ typedef struct {
 
 // Structure for force and torque data
 typedef struct {
-    float zero[6]; // Sensor zero
-    float std[6];  // Torque sensor standard deviation - from zeroing measurement
-    float last[6]; // Last filtered force + torque measurement (N) or (Nm)
-    float raw[6];  // Last raw force + torque measurement (Nm) 
-} torq_info_t;
+    float ain_zero[6];  // Sensor zero
+    float ain_std[6];   // Torque sensor standard deviation - from zeroing measurement
+    float ft_last[6];   // Last filtered force + torque measurement (N) or (Nm)
+    float ft_raw[6];    // Last raw force + torque measurement (Nm) 
+    Calibration *cal;   // Six axis sensor calibration
+} ft_info_t;
+
+// Structure for motor indices
+typedef struct {
+    int curr;
+    int prev;
+} motor_ind_t;
 
 // Six axis force-feedback function 
 extern int sixaxff( 
@@ -176,28 +186,29 @@ extern int init_comedi(
         comedi_info_t comedi_info[], 
         config_t config
         );
+// Initialize ft_info
+extern int init_ft_info(ft_info_t *ft_info, config_t config);
 
 // Get zero value for yaw torque analog input channel
 extern int get_ain_zero(
         comedi_info_t comedi_info[],  
         config_t config, 
-        float *ain_zero,
-        float *ain_std
+        float ain_zero[],
+        float ain_std[]
         );
 
-// Get zero value for yaw torque 
-extern int get_torq_zero(
-        comedi_info_t comedi_info[], 
-        config_t config, 
-        float *torq_zero,
-        float *torq_std
+// Set sensor zero 
+extern int set_sensor_zero(
+        comedi_info_t comedi_info[],
+        config_t config,
+        ft_info_t *ft_info
         );
 
 // Read yaw torque sensor analog inout
 extern int get_ain(
         comedi_info_t comedi_info[], 
         config_t config, 
-        float *ain
+        float ain[]
         );
 
 // Read torque from yaw torque sensor
@@ -218,17 +229,17 @@ extern int ain_to_phys(
 extern int update_state( 
         state_t *state, 
         double t,
-        torq_info_t *torq_info, 
+        ft_info_t *ft_info, 
         comedi_info_t comedi_info[], 
         config_t config
         );
 
 // Initialize motor indices to zeros
-extern void init_ind(int motor_ind[][2], config_t config);
+extern void init_ind(motor_ind_t motor_ind[], config_t config);
 
 // Update motor indices one timestep
 extern int update_ind(
-        int motor_ind[][2], 
+        motor_ind_t motor_ind[],
         array_t kine, 
         int kine_ind, 
         state_t *state, 
@@ -245,7 +256,7 @@ extern state_t get_state_est(
 
 // Update motor positions - move the motors
 extern int update_motor(
-        int motor_ind[][2], 
+        motor_ind_t motor_ind[],
         comedi_info_t comedi_info[], 
         config_t config
         );
@@ -256,7 +267,7 @@ extern int update_data(
         int ind, 
         double t, 
         state_t *state, 
-        torq_info_t torq_info
+        ft_info_t ft_info
         ); 
 
 // Set clock dio lines to DIO_LO
@@ -268,5 +279,5 @@ extern int set_clks_lo(
 // Reassign sigint signal handler
 extern sighandler_t reassign_sigint(sighandler_t sigint_func);
 
-#endif // INC_YAWFF_H_
+#endif // INC_SIXAXFF_H_
 

@@ -36,6 +36,10 @@
 #include "util.h"
 #include "check.h"
 
+// Names and units for sixaxis sensor data
+const char *FT_NAMES[] = {"fx", "fy", "fz", "tx", "ty", "tz"};
+const char *FT_UNITS[] = {"N", "N", "N", "Nm", "Nm", "Nm"};
+
 // RT-task parameters
 #define PRIORITY 1
 #define STACK_SIZE 4096
@@ -85,14 +89,16 @@ static void *sixaxff_thread(void *args);
 void sigint_func(int sig);
 void init_status_vals(status_t *status);
 void read_status(status_t *status_copy);
-void update_status(int i, 
-       float t, 
-       state_t *state, 
-       torq_info_t torq_info,
-       int motor_ind[MAX_MOTOR][2],
-       int running,
-       int err_msg,
-       int wait_flag);
+void update_status(
+        int i, 
+        float t, 
+        state_t state[], 
+        ft_info_t ft_info,
+        unsigned int ff_ft[],
+        motor_ind_t motor_ind[],
+        int running,
+        int err_msg,
+        int wait_flag);
 
 // Global variables and constants
 volatile static int end = 0;
@@ -118,140 +124,156 @@ static status_t status;
 // -------------------------------------------------------------------
 int sixaxff(array_t kine, config_t config, data_t data, int end_pos[])
 {
-  RT_TASK *sixaxff_task;
-  int rt_thread;
-  sighandler_t sighandler = NULL;
-  int rtn_flag = SUCCESS;
-  sixaxff_args_t thread_args;
-  status_t status_copy;
-  struct timespec sleep_ts;
-  int i;
+    RT_TASK *sixaxff_task;
+    int rt_thread;
+    sighandler_t sighandler = NULL;
+    int rtn_flag = SUCCESS;
+    sixaxff_args_t thread_args;
+    status_t status_copy;
+    struct timespec sleep_ts;
+    int i;
 
-  // Initialize globals
-  end = 0;
-  init_status_vals(&status); // Values only - doesn't initialize lock
- 
-  // Startup method 
-  printf("\n");
-  printf("                  Starting sixaxff \n");
-  printf("=======================================================\n");
+    // Initialize globals
+    end = 0;
+    init_status_vals(&status); // Values only - doesn't initialize lock
 
-  // Check inputs
-  fflush_printf("checking input args\n");
-  if (check_sixaxff_input(kine,config,data) != SUCCESS) {
-    PRINT_ERR_MSG("bad input data");
-    return FAIL;
-  }
-  
-  print_config(config);
+    // Startup method 
+    printf("\n");
+    printf("                  Starting sixaxff \n");
+    printf("=======================================================\n");
 
-  /*
-
-  // Setup SIGINT handler
-  fflush_printf("reassigning SIGINT handler\n");
-  sighandler = reassign_sigint(sigint_func);
-  if (sighandler == SIG_ERR) {
-    return FAIL;
-  }
-
-  // Intialize status semephore
-  fflush_printf("initializing status semaphore\n");
-  status.lock = rt_typed_sem_init(nam2num("STATUS"),1,BIN_SEM | FIFO_Q);
-  if (status.lock == NULL) {
-    PRINT_ERR_MSG("unable to initialize status semaphore");
-    fflush_printf("restoring SIGINT handler\n");
-    sighandler = reassign_sigint(sighandler);
-    return FAIL;
-  }
-  
-  //Initialize RT task
-  fflush_printf("initializing sixaxff_task\n");
-  rt_allow_nonroot_hrt();
-  sixaxff_task = rt_task_init(nam2num("YAWFF"),PRIORITY,STACK_SIZE,MSG_SIZE);
-  if (!sixaxff_task) {
-    PRINT_ERR_MSG("error initializing sixaxff_task");
-    fflush_printf("restoring SIGINT handler\n");
-    sighandler = reassign_sigint(sighandler);
-    return FAIL;
-  }
-  rt_set_oneshot_mode();
-  start_rt_timer(0);
-
-  // Assign arguments to thread
-  thread_args.kine = &kine;
-  thread_args.config = &config;
-  thread_args.data = &data;
-  
-  // Start motor thread
-  fflush_printf("starting rt_thread\n");
-  rt_thread = rt_thread_create(sixaxff_thread, ((void *)&thread_args), STACK_SIZE);
-
-  // Set reporter sleep timespec
-  sleep_ts.tv_sec = 0;
-  sleep_ts.tv_nsec = 100000000;
-  
-  // Run time display
-  do {
-    // copy of status information structure - use locks
-    read_status(&status_copy);
-
-    // Once realtime task is running display data
-    if (status_copy.running) {
-      fflush_printf("                                                             ");
-      fflush_printf("\r");
-      fflush_printf("%3.0f\%, t: %3.2f, pos: %3.2f, vel: %3.2f, torq: %3.5f",
-          100.0*(float)status.ind/(float)kine.nrow, 
-          status_copy.t,
-          status_copy.pos*RAD2DEG,
-          status_copy.vel*RAD2DEG,
-          status_copy.torq);
-      fflush_printf("\r");
+    // Check inputs
+    fflush_printf("checking input args\n");
+    if (check_sixaxff_input(kine,config,data) != SUCCESS) {
+        PRINT_ERR_MSG("bad input data");
+        return FAIL;
     }
-    nanosleep(&sleep_ts,NULL);
-  } while (!end);
+    print_config(config);
 
-  // Wait to join
-  rt_thread_join(rt_thread);
-  fflush_printf("rt_thread joined\n");
+    // Setup SIGINT handler
+    fflush_printf("reassigning SIGINT handler\n");
+    sighandler = reassign_sigint(sigint_func);
+    if (sighandler == SIG_ERR) {
+        return FAIL;
+    }
 
-  // One last read of status to get errors and final position
-  read_status(&status_copy); 
+    // Intialize status semephore
+    //  ------------------------------------------------------------
+    // Note, if lxrt stuff is not running I get segfault here
+    // Is there any way to test if the lxrt stuff in inserted into 
+    // the kernel???
+    // -------------------------------------------------------------
+    fflush_printf("initializing status semaphore\n");
+    status.lock = rt_typed_sem_init(nam2num("STATUS"),1,BIN_SEM | FIFO_Q);
+    if (status.lock == NULL) {
+        PRINT_ERR_MSG("unable to initialize status semaphore");
+        fflush_printf("restoring SIGINT handler\n");
+        sighandler = reassign_sigint(sighandler);
+        return FAIL;
+    }
 
-  // Clean up
-  stop_rt_timer();
-  rt_task_delete(sixaxff_task);
-  fflush_printf("sixaxff_task deleted\n");
-  rt_sem_delete(status.lock);
 
-  // Restore old SIGINT handler
-  fflush_printf("restoring SIGINT handler\n");
-  sighandler = reassign_sigint(sighandler);
-  if (sighandler == SIG_ERR) {
-    PRINT_ERR_MSG("restoring signal handler failed");
-    rtn_flag = FAIL;
-  }
+    //Initialize RT task
+    fflush_printf("initializing sixaxff_task\n");
+    rt_allow_nonroot_hrt();
+    sixaxff_task = rt_task_init(nam2num("YAWFF"),PRIORITY,STACK_SIZE,MSG_SIZE);
+    if (!sixaxff_task) {
+        PRINT_ERR_MSG("error initializing sixaxff_task");
+        fflush_printf("restoring SIGINT handler\n");
+        sighandler = reassign_sigint(sighandler);
+        return FAIL;
+    }
+    rt_set_oneshot_mode();
+    start_rt_timer(0);
 
-  // Print any error messages
-  if (status_copy.err_flag & RT_TASK_SIGINT) {
-    fflush_printf("real-time task stopped with: RT_SIGINT\n");
-  }
+    // Assign arguments to thread
+    thread_args.kine = &kine;
+    thread_args.config = &config;
+    thread_args.data = &data;
 
-  if (status_copy.err_flag & RT_TASK_ERROR) {
-    fflush_printf("real-time task stopped with: RT_ERROR \n");
-  }
+    // Start motor thread
+    fflush_printf("starting rt_thread\n");
+    rt_thread = rt_thread_create(sixaxff_thread, ((void *)&thread_args), STACK_SIZE);
 
-  // Copy motor indices into end_pos
-  fflush_printf("end_pos: ");
-  for (i=0; i<config.num_motor; i++) {
-    end_pos[i] = status_copy.motor_ind[i];
-    fflush_printf("%d", end_pos[i]);
-    if (i!=config.num_motor-1) fflush_printf(", ");
-  }
-  fflush_printf("\n");
-  */
-  
-  // Temporary
-  return rtn_flag;
+    // Set reporter sleep timespec
+    sleep_ts.tv_sec = 0;
+    sleep_ts.tv_nsec = 100000000;
+
+    // Run time display
+    do {
+        // copy of status information structure - use locks
+        read_status(&status_copy);
+
+        // Once realtime task is running display data
+        if (status_copy.running) {
+            fflush_printf("                                                                            "); 
+            fflush_printf("\r");
+            fflush_printf("%3.0f\%, t: %3.2f, ", 100.0*(float)status.ind/(float)kine.nrow, status_copy.t);
+            for (i=0; i<NUM_FF; i++) {
+                fflush_printf("p[%d]: %3.2f(%s), v[%d]: %3.2f(%s/s), ft[%d]: %s %3.2f(%s)",
+                        i,
+                        status_copy.pos[i]*config.ff_ind2unit[i],
+                        config.ff_axesunits[i],
+                        i,
+                        status_copy.vel[i]*config.ff_ind2unit[i],
+                        config.ff_axesunits[i],
+                        i, 
+                        FT_NAMES[config.ff_ft[i]],
+                        status_copy.ft[i],
+                        FT_UNITS[config.ff_ft[i]]
+                    );
+                if (i<NUM_FF-1) {
+                    fflush_printf(", ");
+                }
+            }
+            fflush_printf("\r");
+        }
+        nanosleep(&sleep_ts,NULL);
+    } while (!end);
+
+    // Wait to join
+    rt_thread_join(rt_thread);
+    fflush_printf("rt_thread joined\n");
+
+    // One last read of status to get errors and final position
+    read_status(&status_copy); 
+
+    // Clean up
+    stop_rt_timer();
+    rt_task_delete(sixaxff_task);
+    fflush_printf("sixaxff_task deleted\n");
+    rt_sem_delete(status.lock);
+
+
+    // Restore old SIGINT handler
+    fflush_printf("restoring SIGINT handler\n");
+    sighandler = reassign_sigint(sighandler);
+    if (sighandler == SIG_ERR) {
+        PRINT_ERR_MSG("restoring signal handler failed");
+        rtn_flag = FAIL;
+    }
+
+
+    // Print any error messages
+    if (status_copy.err_flag & RT_TASK_SIGINT) {
+        fflush_printf("real-time task stopped with: RT_SIGINT\n");
+    }
+
+    if (status_copy.err_flag & RT_TASK_ERROR) {
+        fflush_printf("real-time task stopped with: RT_ERROR \n");
+    }
+
+    // Copy motor indices into end_pos
+    fflush_printf("end_pos: ");
+    for (i=0; i<config.num_motor; i++) {
+        end_pos[i] = status_copy.motor_ind[i];
+        fflush_printf("%d", end_pos[i]);
+        if (i!=config.num_motor-1) fflush_printf(", ");
+    }
+    fflush_printf("\n");
+
+    // Temporary
+    return rtn_flag;
 }
 
 // ------------------------------------------------------------------
@@ -271,167 +293,172 @@ int sixaxff(array_t kine, config_t config, data_t data, int end_pos[])
 //
 // ------------------------------------------------------------------
 
-/*
 static void *sixaxff_thread(void *args)
 {
-  RT_TASK *rt_task=NULL;
-  RTIME now_ns;
-  sixaxff_args_t *thread_args=NULL;
-  comedi_info_t comedi_info[NUM_COMEDI_DEV];
-  array_t kine;
-  config_t config;
-  data_t data;
-  torq_info_t torq_info;
-  state_t state[2];            // state[0] = previous, state[1] = current 
-  int motor_ind[MAX_MOTOR][2]; // Motor index position [i][0] previous, [i][1] current
-  float runtime;
-  double t;
-  int err_flag = 0;
-  int i;
+    RT_TASK *rt_task=NULL;
+    RTIME now_ns;
+    sixaxff_args_t *thread_args=NULL;
+    comedi_info_t comedi_info[NUM_COMEDI_DEV];
+    array_t kine;
+    config_t config;
+    data_t data;
+    ft_info_t ft_info;
+    state_t state[NUM_FF];
+    motor_ind_t motor_ind[MAX_MOTOR];
+    float runtime;
+    double t;
+    int err_flag = 0;
+    int i;
 
-  // Unpack arguments passed to thread
-  thread_args = (sixaxff_args_t *) args;
-  kine = *(thread_args -> kine);
-  config = *(thread_args -> config);
-  data = *(thread_args -> data);
+    // Unpack arguments passed to thread
+    thread_args = (sixaxff_args_t *) args;
+    kine = *(thread_args -> kine);
+    config = *(thread_args -> config);
+    data = *(thread_args -> data);
 
-  // Initialize comedi device
-  if (init_comedi(comedi_info, config) != SUCCESS) {
-    PRINT_ERR_MSG("unable to initialize comedi device");
-    end = 1;
-    return 0;
-  }
 
-  // Initialize, time, dynamic state, and motor indices
-  for (i=0; i<2; i++) {
-    state[i].pos = 0.0;
-    state[i].vel = 0.0;
-  }  
-  init_ind(motor_ind,config);
-  t = 0.0;
+    // Initialize, time, dynamic state, and motor indices
+    for (i=0; i<NUM_FF; i++) {
+        state[i].pos = 0.0;
+        state[i].vel = 0.0;
+        state[i].pos_prev = 0.0;
+        state[i].vel_prev = 0.0;
+    }  
+    init_ind(motor_ind,config);
+    t = 0.0;
 
-  // Initialize torque info
-  torq_info.zero = 0.0;
-  torq_info.last = 0.0;
-  torq_info.std = 0.0;
-  torq_info.raw = 0.0;
-  torq_info.highpass = 0.0;
-  
-  // Find yaw torque zero
-  if (get_torq_zero(comedi_info, config, &torq_info.zero, &torq_info.std) != SUCCESS) {
-    PRINT_ERR_MSG("failed to get ain zero");
-    // Error, clean up and exit
-    if (rt_cleanup(RT_CLEANUP_LEVEL_1,comedi_info,rt_task) != SUCCESS) {
-      PRINT_ERR_MSG("rt_cleanup failed");
+    // Initialize torque info, read sensor calibration
+    if (init_ft_info(&ft_info, config) != SUCCESS) {
+        PRINT_ERR_MSG("unable to initialize ft_info");
+        end = 1;
+        return 0;
     }
-    end = 1;
-    return 0;
-  }  
 
-  // Initialize rt_task
-  fflush_printf("Initializing rt_task \n");
-  rt_task = rt_task_init_schmod(nam2num("MOTOR"),0, 0, 0, SCHED_FIFO, 0xF);
-  if (!rt_task) {          
-    PRINT_ERR_MSG("cannot initialize rt task");
-    // Error, clean up and exit
-    if (rt_cleanup(RT_CLEANUP_LEVEL_1,comedi_info,rt_task) != SUCCESS) {
-      PRINT_ERR_MSG("rt_cleanup failed");
+    // Initialize comedi device
+    if (init_comedi(comedi_info, config) != SUCCESS) {
+        PRINT_ERR_MSG("unable to initialize comedi device");
+        end = 1;
+        return 0;
     }
-    end = 1;
-    return 0;
-  }
-  rt_task_use_fpu(rt_task,1); // Enable use of floating point math
-  
-  // Go to hard real-time
-  runtime = ((float) config.dt)*((float) kine.nrow)*NS2S;
-  fflush_printf("starting hard real-time, T = %1.3f(s)\n", runtime);
-  mlockall(MCL_CURRENT|MCL_FUTURE);
-  rt_make_hard_real_time();
 
-  // Loop over kinematics 
-  for (i=0; i<kine.nrow; i++) {
+    // Set sensor zero
+    if (set_sensor_zero(comedi_info, config, &ft_info) != SUCCESS) {
+        PRINT_ERR_MSG("unable to set sensor zero");
+        end = 1;
+        return 0;
+    }
 
-    now_ns = rt_get_time_ns();
-    
+
+    // Initialize rt_task
+    fflush_printf("Initializing rt_task \n");
+    rt_task = rt_task_init_schmod(nam2num("MOTOR"),0, 0, 0, SCHED_FIFO, 0xF);
+    if (!rt_task) {          
+        PRINT_ERR_MSG("cannot initialize rt task");
+        // Error, clean up and exit
+        if (rt_cleanup(RT_CLEANUP_LEVEL_1,comedi_info,rt_task) != SUCCESS) {
+            PRINT_ERR_MSG("rt_cleanup failed");
+        }
+        end = 1;
+        return 0;
+    }
+    rt_task_use_fpu(rt_task,1); // Enable use of floating point math
+
+    // Go to hard real-time
+    runtime = ((float) config.dt)*((float) kine.nrow)*NS2S;
+    fflush_printf("starting hard real-time, T = %1.3f(s)\n", runtime);
+    mlockall(MCL_CURRENT|MCL_FUTURE);
+    rt_make_hard_real_time();
+
+    // Loop over kinematics 
+    for (i=0; i<kine.nrow; i++) {
+
+        now_ns = rt_get_time_ns();
+
+    /*
+
     // Update dynamic state
-    if (update_state(state, t, &torq_info, comedi_info,config) != SUCCESS) {
-      PRINT_ERR_MSG("updating dynamic state failed");
-      err_flag |= RT_TASK_ERROR;
-      break;
+    if (update_state(state, t, &ft_info, comedi_info,config) != SUCCESS) {
+    PRINT_ERR_MSG("updating dynamic state failed");
+    err_flag |= RT_TASK_ERROR;
+    break;
     }
 
     // Update motor index array
     if (update_ind(motor_ind,kine,i,state,config) != SUCCESS) {
-      PRINT_ERR_MSG("updating motor indices failed");
-      err_flag |= RT_TASK_ERROR;
-      break;
+    PRINT_ERR_MSG("updating motor indices failed");
+    err_flag |= RT_TASK_ERROR;
+    break;
     }
     // Update motor positions
     if (update_motor(motor_ind, comedi_info, config) != SUCCESS) {
-      PRINT_ERR_MSG("updating motor positions failed");
-      err_flag |= RT_TASK_ERROR;
-      break;
+    PRINT_ERR_MSG("updating motor positions failed");
+    err_flag |= RT_TASK_ERROR;
+    break;
     }
-    
+
     // Update data
     if (update_data(data,i,t,state,torq_info) != SUCCESS) {
-      PRINT_ERR_MSG("updating data arrays failed");
-      err_flag |= RT_TASK_ERROR;
-      break;
+    PRINT_ERR_MSG("updating data arrays failed");
+    err_flag |= RT_TASK_ERROR;
+    break;
     }
-    
+
     // Sleep for CLOCK_HI_NS and then set clock lines low
     rt_sleep_until(nano2count(now_ns + (RTIME) CLOCK_HI_NS));
     if (set_clks_lo(comedi_info, config) != SUCCESS) {
-      PRINT_ERR_MSG("setting dio clks failed");
-      err_flag |= RT_TASK_ERROR;
-      break;
+    PRINT_ERR_MSG("setting dio clks failed");
+    err_flag |= RT_TASK_ERROR;
+    break;
     }
-  
-    // Check if end has been set to 1 by SIGINT handler
-    if (end == 1) {
-      fflush_printf("\nSIGINT - exiting real-time");
-      err_flag |= RT_TASK_SIGINT;
-      break;
+
+    */
+
+        // Check if end has been set to 1 by SIGINT handler
+        if (end == 1) {
+            fflush_printf("\nSIGINT - exiting real-time");
+            err_flag |= RT_TASK_SIGINT;
+            break;
+        }
+
+        // Update information if global variable status 
+        update_status(i,t,state,ft_info,config.ff_ft,motor_ind,RT_RUNNING,0,RT_LOCK_NOWAIT);
+
+        // Sleep until next period
+        rt_sleep_until(nano2count(now_ns + config.dt));
+
+        // Update time
+        t += NS2S*((double)config.dt);
+    } // End for i
+
+    // Set status information to final values before exiting
+    update_status(
+    kine.nrow-1,
+    t,
+    state,
+    ft_info,
+    config.ff_ft,
+    motor_ind,
+    RT_STOPPED,
+    err_flag,
+    RT_LOCK_WAIT
+    );
+
+
+    // Leave realtime
+    rt_make_soft_real_time();
+    munlockall();
+    fflush_printf("\nleaving hard real-time\n");
+
+
+    // Clean up
+    if (rt_cleanup(RT_CLEANUP_ALL, comedi_info, rt_task)!=SUCCESS) {
+        PRINT_ERR_MSG("rt_cleanup failed");
     }
-    
-    // Update information if global variable status 
-    update_status(i,t,state,torq_info,motor_ind,RT_RUNNING,0,RT_LOCK_NOWAIT);
 
-    // Sleep until next period
-    rt_sleep_until(nano2count(now_ns + config.dt));
+    end = 1;
 
-    // Update time
-    t += NS2S*((double)config.dt);
-  } // End for i
-
-  // Set status information to final values before exiting
-  update_status(
-      kine.nrow-1,
-      t,
-      state,
-      torq_info,
-      motor_ind,
-      RT_STOPPED,
-      err_flag,
-      RT_LOCK_WAIT
-      );
-
-  // Leave realtime
-  rt_make_soft_real_time();
-  munlockall();
-  fflush_printf("\nleaving hard real-time\n");
-
-  // Clean up
-  if (rt_cleanup(RT_CLEANUP_ALL, comedi_info, rt_task)!=SUCCESS) {
-    PRINT_ERR_MSG("rt_cleanup failed");
-  }
-  
-  end = 1;
-
-  return 0;
+    return 0;
 }
-*/
 
 
 // -------------------------------------------------------------------
@@ -492,8 +519,10 @@ void read_status(status_t *status_copy)
 //
 //   i          = current kinematics index
 //   t          = current time in seconds
-//   state      = current state vector array
-//   torq_info  = current torq infor structure
+//   state      = current state array
+//   ft_info    = current force/torque information strucuture 
+//   ff_ft      = array of indices specifiying sensor channels used 
+//                for force/torque feedback 
 //   running    = flag which indicates real-time loop is running
 //   err_msg    = error indocator
 //   wait_flag  = RT_LOCK_WAIT or RT_LOCK_NOWAIT
@@ -502,58 +531,59 @@ void read_status(status_t *status_copy)
 //
 // ---------------------------------------------------------------------
 
-/*
 void update_status(
-    int i, 
-    float t, 
-    state_t *state, 
-    torq_info_t torq_info,
-    int motor_ind[MAX_MOTOR][2],
-    int running,
-    int err_flag,
-    int wait_flag
-    )
+        int i, 
+        float t, 
+        state_t state[], 
+        ft_info_t ft_info,
+        unsigned int ff_ft[],
+        motor_ind_t motor_ind[],
+        int running,
+        int err_flag,
+        int wait_flag
+        )
 {
-  int j;
-  int have_lock;
-  
-  switch (wait_flag) {
-    
-  case RT_LOCK_NOWAIT:
-    // Try and acquire lock - but don't wait if you can't get it
-    have_lock = rt_sem_wait_if(status.lock);
-    break;
-    
-  case RT_LOCK_WAIT:
-    // Acquire lock - wait if you can't get it. 
-    rt_sem_wait(status.lock);
-    have_lock = 1;
-    break;
-    
-  default:
-    // Unknown flag
-    PRINT_ERR_MSG("unkown wait_flag");
-    return;
-    break;
-  }
+    int j;
+    int have_lock;
 
-  // Update data in status structure if lock was aqcuired 
-  if (have_lock) {
-  status.ind = i;
-  status.t = t;
-  status.pos = state[1].pos;
-  status.vel = state[1].vel;
-  status.torq = torq_info.last; 
-  status.running = running;
-  status.err_flag |= err_flag;
-  for (j=0;j<MAX_MOTOR;j++) {
-    status.motor_ind[j] = motor_ind[j][1];
-  }
-  rt_sem_signal(status.lock);
-  }
-  return;
+    switch (wait_flag) {
+
+        case RT_LOCK_NOWAIT:
+            // Try and acquire lock - but don't wait if you can't get it
+            have_lock = rt_sem_wait_if(status.lock);
+            break;
+
+        case RT_LOCK_WAIT:
+            // Acquire lock - wait if you can't get it. 
+            rt_sem_wait(status.lock);
+            have_lock = 1;
+            break;
+
+        default:
+            // Unknown flag
+            PRINT_ERR_MSG("unkown wait_flag");
+            return;
+            break;
+    }
+
+    // Update data in status structure if lock was aqcuired 
+    if (have_lock) {
+        status.ind = i;
+        status.t = t;
+        for (j=0; j<NUM_FF; j++) {
+            status.pos[j] = state[j].pos;
+            status.vel[j] = state[j].vel;
+            status.ft[j] = ft_info.ft_last[ff_ft[j]]; 
+        }
+        status.running = running;
+        status.err_flag |= err_flag;
+        for (j=0;j<MAX_MOTOR;j++) {
+            status.motor_ind[j] = motor_ind[j].curr;
+        }
+        rt_sem_signal(status.lock);
+    }
+    return;
 }
-*/
 
 // ---------------------------------------------------------------------
 // Function: update_data
@@ -799,20 +829,52 @@ int update_ind(
 // Return: void
 //  
 // ---------------------------------------------------------------------
-
-/*
-void init_ind(int motor_ind[][2], config_t config)
+void init_ind(motor_ind_t motor_ind[], config_t config)
 {
-  int i,j; 
+    int i,j; 
 
-  for (i=0; i<config.num_motor; i++) {
-    for (j=0; j<2; j++) {
-      motor_ind[i][j] = 0.0;
+    for (i=0; i<config.num_motor; i++) {
+        for (j=0; j<2; j++) {
+            motor_ind[i].curr = 0;
+            motor_ind[i].prev = 0;
+        }
     }
-  }
-  return;
+    return;
 }
-*/
+
+// ---------------------------------------------------------------------
+// Function: init_ft_info
+//
+// Purpose: Initialize structure containing force/torque information
+//
+// Arguments:
+//   ft_info    = pointer to force/torque information structure
+//   config     = system configuration structure.
+//
+// Return: SUCCESS/FAIL 
+//  
+// ---------------------------------------------------------------------
+int init_ft_info(ft_info_t *ft_info, config_t config)
+{
+    int i;
+    int rtn_val;
+
+    for (i=0; i<6; i++) {
+        (ft_info -> ain_zero)[i] = 0.0;
+        (ft_info -> ain_std)[i] = 0.0;
+        (ft_info -> ft_last)[i] = 0.0;
+        (ft_info -> ft_raw)[i] = 0.0;
+    }
+    ft_info -> cal = NULL;
+    fflush_printf("reading sensor calibration file: %s\n", config.cal_file_path);
+    rtn_val = sixax_init_cal(&(ft_info -> cal), config.cal_file_path, config.ff_tooltrans);
+    if (rtn_val == FAIL) {
+        PRINT_ERR_MSG("unable to initialize six axis sensor calibration");
+        return FAIL;
+    }
+    //sixax_print_calinfo(ft_info->cal);
+    return SUCCESS;
+} 
 
 // ----------------------------------------------------------------------
 // Function: update_state
@@ -860,7 +922,7 @@ int update_state(
   torq_raw = torq_raw-(torq_info->zero);
 
   ///////////////////////////////////////////////////////////////////
-  // Constant torque test  - set torque to some know value.
+  // Constant torque test  - set torque to some known value.
   // torq_raw = 0.015;
   // torq_raw = torq_raw + 0.015;
   ///////////////////////////////////////////////////////////////////
@@ -917,44 +979,51 @@ int update_state(
 }
 */
 
-// ----------------------------------------------------------------------
-// Function: get_torq_zero
+// -----------------------------------------------------------------------
+// Function: set_sensor_zero 
 //
-// Purpose: Determines the zero bais value and standard deviation in (Nm) 
-// for yaw torque sensor. 
+// Purpose: Reads sample values from sensor and upades ft_info.cal 
+// to automatically remove the bais values 
 //
 // Arguments:
 //   comedi_info  = daq/dio device information structure
 //   config       = system configuration structure
-//   torq_zero    = pointer to float for torque zero bias 
-//   torq_std     = pointer to float for torque standard deviation
+//   ft_info      = pointer to force/torque information structure
 //
 // Return: SUCCESS or FAIL
 //
-// ----------------------------------------------------------------------
+// -----------------------------------------------------------------------
 
-/*
-int get_torq_zero(comedi_info_t comedi_info[], config_t config, float *torq_zero, float *torq_std)
+int set_sensor_zero(
+        comedi_info_t comedi_info[], 
+        config_t config, 
+        ft_info_t *ft_info)
 {
-  float ain_zero;
-  float ain_std;
+    int rtn_val = SUCCESS;
 
-  // Get analog input zero
-  if (get_ain_zero(comedi_info, config, &ain_zero, &ain_std) != SUCCESS) {
-    PRINT_ERR_MSG("unable to get ain zero");
-    return FAIL;
-  }
+    // Get analog input zero
+    rtn_val = get_ain_zero(
+            comedi_info,
+            config,
+            ft_info->ain_zero,
+            ft_info->ain_std
+            );
+    if (rtn_val != SUCCESS) {
+        PRINT_ERR_MSG("unable to get analog input zero");
+        return FAIL;
+    }
 
-  // Convert to torque
-  *torq_zero = ain_zero*config.yaw_volt2torq;
-  *torq_std = ain_std*config.yaw_volt2torq;
-  
-  fflush_printf("torque zero: %f(Nm)\n", *torq_zero);
-  fflush_printf("torque std:  %f(Nm)\n", *torq_std);
+   // Set calibration bias values
+   fflush_printf("setting sensor bias\n");
+   rtn_val = sixax_set_bias(ft_info -> cal, ft_info -> ain_zero); 
+   if (rtn_val != SUCCESS) {
+       PRINT_ERR_MSG("unable to set sensor bias");
+       return FAIL;
+   }
 
-  return SUCCESS;
+    return SUCCESS;
 }
-*/
+
 
 // -----------------------------------------------------------------------
 // Function: get_ain_zero
@@ -971,57 +1040,72 @@ int get_torq_zero(comedi_info_t comedi_info[], config_t config, float *torq_zero
 // Return: SUCCESS or FAIL
 //
 // -----------------------------------------------------------------------
-
-/*
-int get_ain_zero(comedi_info_t comedi_info[], config_t config, float *ain_zero, float *ain_std)
+int get_ain_zero(
+        comedi_info_t comedi_info[], 
+        config_t config, 
+        float ain_zero[], 
+        float ain_std[]
+        )
 {
-  int i;
-  float ain[config.yaw_ain_zero_num];
-  int ret_flag = SUCCESS;
-  char err_msg[ERR_SZ];
-  struct timespec sleep_req;
-  float t_zero;
+    int i;
+    int j;
+    float ain[config.ain_zero_num][6];
+    int ret_flag = SUCCESS;
+    char err_msg[ERR_SZ];
+    struct timespec sleep_req;
+    float t_zero;
 
-  t_zero = config.yaw_ain_zero_dt*config.yaw_ain_zero_num;
-  fflush_printf("finding ain zero and std, T = %1.3f(s) \n", t_zero);
+    t_zero = config.ain_zero_dt*config.ain_zero_num;
+    fflush_printf("finding ain zero and std, T = %1.3f(s) \n", t_zero);
 
-  // Set sleep timespec
-  sleep_req.tv_sec = (time_t) config.yaw_ain_zero_dt;
-  sleep_req.tv_nsec = 1.0e9*(config.yaw_ain_zero_dt - (time_t) config.yaw_ain_zero_dt);
+    // Set sleep timespec
+    sleep_req.tv_sec = (time_t) config.ain_zero_dt;
+    sleep_req.tv_nsec = 1.0e9*(config.ain_zero_dt - (time_t) config.ain_zero_dt);
 
-  // Get samples for ain mean  
-  for (i=0; i<config.yaw_ain_zero_num; i++) {
+    // Get samples for ain mean  
+    for (i=0; i<config.ain_zero_num; i++) {
 
-    if (get_ain(comedi_info, config, &ain[i]) != SUCCESS) {
-      snprintf(err_msg, ERR_SZ, "unable to read ain, i = %d", i);
-      PRINT_ERR_MSG(err_msg);
-      ret_flag = FAIL;
-      break;
+        if (get_ain(comedi_info, config, ain[i]) != SUCCESS) {
+            snprintf(err_msg, ERR_SZ, "unable to read ain, i = %d", i);
+            PRINT_ERR_MSG(err_msg);
+            ret_flag = FAIL;
+            break;
+        }
+        // Sleep for AIN_SLEEP_DT seconds
+        nanosleep(&sleep_req, NULL);
     }
-    // Sleep for AIN_SLEEP_DT seconds
-    nanosleep(&sleep_req, NULL);
-  }
 
-  // Compute ain mean - this is our zero
-  *ain_zero = 0.0;
-  for (i=0; i<config.yaw_ain_zero_num;i++) {
-      *ain_zero += ain[i];
-  }
-  *ain_zero /= (float)config.yaw_ain_zero_num;
-  fflush_printf("ain_zero: %f(V)\n", *ain_zero);
+    // Compute ain mean - this is our zero
+    for (i=0; i<6; i++) {
+        ain_zero[i] = 0.0;
+    }
+    for (i=0; i<config.ain_zero_num;i++) {
+        for (j=0; j<6; j++) {
+            ain_zero[j] += ain[i][j];
+        }
+    }
+    for (i=0; i<6; i++) {
+        ain_zero[i] /= (float)config.ain_zero_num;
+        fflush_printf("ain_zero[%d]: %f(V)\n", i, ain_zero[i]);
+    }
 
-  // Compute ain standard deviation
-  *ain_std = 0.0;
-  for (i=0; i<config.yaw_ain_zero_num; i++) {
-      *ain_std += powf(ain[i] - *ain_zero, 2.0);
-  }
-  *ain_std /= (float) config.yaw_ain_zero_num;
-  *ain_std = sqrtf(*ain_std);
-  fflush_printf("ain_std: %f(V)\n", *ain_std);
-  
-  return ret_flag;
+    // Compute ain standard deviation
+    for (i=0; i<6; i++) {
+        ain_std[i] = 0.0;
+    }
+    for (i=0; i<config.ain_zero_num; i++) {
+        for (j=0; j<6; j++) {
+            ain_std[j] += powf(ain[i][j] - ain_zero[j], 2.0);
+        }
+    }
+    for (i=0; i<6; i++) {
+        ain_std[i] /= (float) config.ain_zero_num;
+        ain_std[i] = sqrtf(ain_std[i]);
+        fflush_printf("ain_std[%d]: %f(V)\n", i, ain_std[i]);
+    }
+
+    return ret_flag;
 }
-*/
 
 // ------------------------------------------------------------------
 // Function: get_ain
@@ -1037,34 +1121,39 @@ int get_ain_zero(comedi_info_t comedi_info[], config_t config, float *ain_zero, 
 //
 // ------------------------------------------------------------------
 
-/*
-int get_ain(comedi_info_t comedi_info[], config_t config, float *ain)
+int get_ain(comedi_info_t comedi_info[], config_t config, float ain[])
 {
-  int rval;
-  lsampl_t ain_lsampl; 
 
-  // Read value from daq card
-  rval = comedi_data_read(
-      comedi_info[config.ain_dev].device,
-      config.ain_subdev,
-      config.yaw_ain,
-      AIN_RANGE,
-      AIN_AREF,
-      &ain_lsampl
-      );
-  if (rval!=1) {
-    PRINT_ERR_MSG("comedi_data_read failed");
-    return FAIL;
-  }
-  
-  // Convert integer analog input value to volts
-  if (ain_to_phys(ain_lsampl, comedi_info[config.ain_dev], ain) != SUCCESS) {
-    PRINT_ERR_MSG("ain_to_phys failed");
-    return FAIL;
-  }
-  return SUCCESS;
+    int i;
+    int rval;
+    lsampl_t ain_lsampl; 
+
+    // Loop over analog input channels
+    for (i=0; i<6; i++) {
+        // Read value from daq card, use comdei_data_read_delayed - to allow 
+        // analog inputs to settle
+        rval = comedi_data_read_delayed(
+                comedi_info[config.ain_dev].device,
+                config.ain_subdev,
+                i,
+                AIN_RANGE,
+                AIN_AREF,
+                &ain_lsampl,
+                AIN_DELAY_NS
+                );
+        if (rval!=1) {
+            PRINT_ERR_MSG("comedi_data_read failed");
+            return FAIL;
+        }
+
+        // Convert integer analog input value to volts
+        if (ain_to_phys(ain_lsampl, comedi_info[config.ain_dev], &ain[i]) != SUCCESS) {
+            PRINT_ERR_MSG("ain_to_phys failed");
+            return FAIL;
+        }
+    }
+    return SUCCESS;
 }
-*/
 
 // ------------------------------------------------------------------
 // Function: get_torq
@@ -1109,109 +1198,107 @@ int get_torq(comedi_info_t comedi_info[], config_t config, float *torq)
 //
 // ------------------------------------------------------------------
 
-/*
 int init_comedi(comedi_info_t comedi_info[], config_t config)
 {
-  int i;
-  int rval;
-  char err_msg[ERR_SZ];
-  int ret_flag = SUCCESS;
-  unsigned int ain_dev;
-  unsigned int dio_dev;
+    int i;
+    int rval;
+    int dummy_ain_chan = 0;
+    char err_msg[ERR_SZ];
+    int ret_flag = SUCCESS;
+    unsigned int ain_dev;
+    unsigned int dio_dev;
 
-  ain_dev = config.ain_dev;
-  dio_dev = config.dio_dev;
-  
-  // Open comedi devices
-  for (i=0; i<NUM_COMEDI_DEV; i++) {
-      fflush_printf("opening %s\n",config.dev_name[i]);
-      comedi_info[i].device = comedi_open(config.dev_name[i]);
-      if (comedi_info[i].device == NULL) {
-          snprintf(err_msg, ERR_SZ, "unable to open %s", config.dev_name[i]);
-          PRINT_ERR_MSG(err_msg);
-          return FAIL;
-      }
-  }
+    ain_dev = config.ain_dev;
+    dio_dev = config.dio_dev;
 
-  // Configure dio by setting them to outputs
-  fflush_printf("configuring dio lines\n");
-  for (i=0; i<config.num_motor; i++) {    
-    // Set clock lines to output
-    rval = comedi_dio_config(
-        comedi_info[dio_dev].device, 
-        config.dio_subdev, 
-        config.dio_clk[i],
-        COMEDI_OUTPUT
-        );
-    if (rval != 1 ) {
-      snprintf(err_msg, ERR_SZ, "unable to configure dio_clk[%d]", i);
-      PRINT_ERR_MSG( err_msg);
-      ret_flag = FAIL;
+    // Open comedi devices
+    for (i=0; i<NUM_COMEDI_DEV; i++) {
+        fflush_printf("opening %s\n",config.dev_name[i]);
+        comedi_info[i].device = comedi_open(config.dev_name[i]);
+        if (comedi_info[i].device == NULL) {
+            snprintf(err_msg, ERR_SZ, "unable to open %s", config.dev_name[i]);
+            PRINT_ERR_MSG(err_msg);
+            return FAIL;
+        }
     }
-    // Set direction lines to output 
-    rval = comedi_dio_config(
-        comedi_info[dio_dev].device, 
-        config.dio_subdev, 
-        config.dio_dir[i],
-        COMEDI_OUTPUT
-        );
-    if (rval != 1) {
-      snprintf(err_msg, ERR_SZ, "unable to configure dio_dir[%d]", i);
-      PRINT_ERR_MSG(err_msg);
-      ret_flag = FAIL;
-    }
-  } // End for i
 
-  // Set all configured dio lines to DIO_LO
-  fflush_printf("setting dio lines to DIO_LO\n");
-  for (i=0; i<config.num_motor; i++) {
-    // Set clk dio line to zero
-    rval = comedi_dio_write(
-        comedi_info[dio_dev].device,
-        config.dio_subdev,
-        config.dio_clk[i],
-        DIO_LO
-        );
-    if (rval != 1) {
-      snprintf(err_msg, ERR_SZ, "unable to set dio_clk[%d] to zero", i);
-      PRINT_ERR_MSG(err_msg);
-      ret_flag = FAIL;
-    }
-    // Set dir dio line to zero
-    rval = comedi_dio_write(
-        comedi_info[dio_dev].device,
-        config.dio_subdev,
-        config.dio_dir[i],
-        DIO_LO
-        );
-    if (rval != 1) {
-      snprintf(err_msg, ERR_SZ, "unable to set dio_dir[%d] to zero", i);
-      PRINT_ERR_MSG(err_msg);
-      ret_flag = FAIL;
-    } 
-  } // End for i
+    // Configure dio by setting them to outputs
+    fflush_printf("configuring dio lines\n");
+    for (i=0; i<config.num_motor; i++) {    
+        // Set clock lines to output
+        rval = comedi_dio_config(
+                comedi_info[dio_dev].device, 
+                config.dio_subdev, 
+                config.dio_clk[i],
+                COMEDI_OUTPUT
+                );
+        if (rval != 1 ) {
+            snprintf(err_msg, ERR_SZ, "unable to configure dio_clk[%d]", i);
+            PRINT_ERR_MSG( err_msg);
+            ret_flag = FAIL;
+        }
+        // Set direction lines to output 
+        rval = comedi_dio_config(
+                comedi_info[dio_dev].device, 
+                config.dio_subdev, 
+                config.dio_dir[i],
+                COMEDI_OUTPUT
+                );
+        if (rval != 1) {
+            snprintf(err_msg, ERR_SZ, "unable to configure dio_dir[%d]", i);
+            PRINT_ERR_MSG(err_msg);
+            ret_flag = FAIL;
+        }
+    } // End for i
 
-  // Get max data and krange for conversion to physical units
-  comedi_info[ain_dev].maxdata = comedi_get_maxdata(
-      comedi_info[ain_dev].device, 
-      config.ain_subdev, 
-      config.yaw_ain
-      );
-  rval = comedi_get_krange(
-      comedi_info[ain_dev].device, 
-      config.ain_subdev, 
-      config.yaw_ain, 
-      AIN_RANGE, 
-      &(comedi_info[ain_dev].krange)
-      );
-  if (rval < 0) {
-    PRINT_ERR_MSG("unable to get krange");
-    return FAIL;
-  }
-  return ret_flag;
+    // Set all configured dio lines to DIO_LO
+    fflush_printf("setting dio lines to DIO_LO\n");
+    for (i=0; i<config.num_motor; i++) {
+        // Set clk dio line to zero
+        rval = comedi_dio_write(
+                comedi_info[dio_dev].device,
+                config.dio_subdev,
+                config.dio_clk[i],
+                DIO_LO
+                );
+        if (rval != 1) {
+            snprintf(err_msg, ERR_SZ, "unable to set dio_clk[%d] to zero", i);
+            PRINT_ERR_MSG(err_msg);
+            ret_flag = FAIL;
+        }
+        // Set dir dio line to zero
+        rval = comedi_dio_write(
+                comedi_info[dio_dev].device,
+                config.dio_subdev,
+                config.dio_dir[i],
+                DIO_LO
+                );
+        if (rval != 1) {
+            snprintf(err_msg, ERR_SZ, "unable to set dio_dir[%d] to zero", i);
+            PRINT_ERR_MSG(err_msg);
+            ret_flag = FAIL;
+        } 
+    } // End for i
+
+    // Get max data and krange for conversion to physical units
+    comedi_info[ain_dev].maxdata = comedi_get_maxdata(
+            comedi_info[ain_dev].device, 
+            config.ain_subdev, 
+            dummy_ain_chan
+            );
+    rval = comedi_get_krange(
+            comedi_info[ain_dev].device, 
+            config.ain_subdev, 
+            dummy_ain_chan, 
+            AIN_RANGE, 
+            &(comedi_info[ain_dev].krange));
+    if (rval < 0) {
+        PRINT_ERR_MSG("unable to get krange");
+        return FAIL;
+    }
+    return ret_flag;
 }
 
-*/
 
 // ------------------------------------------------------------------
 // Function: rt_cleanup
@@ -1231,43 +1318,40 @@ int init_comedi(comedi_info_t comedi_info[], config_t config)
 //
 // ------------------------------------------------------------------
 
-/*
 int rt_cleanup(int level, comedi_info_t comedi_info[], RT_TASK *rt_task)
 {
-  
-  int i;
-  int ret_flag = SUCCESS;
+    int i;
+    int ret_flag = SUCCESS;
 
-  fflush_printf("starting rt_cleanup: level=%d\n", level);
-  
-  switch (level) {
-    
-  case RT_CLEANUP_LEVEL_2:
-    fflush_printf("  %d: deleting rt_task\n", RT_CLEANUP_LEVEL_2);
-    if (rt_task_delete(rt_task) != 0) {
-      PRINT_ERR_MSG("unable to delete rt_task");
-      ret_flag = FAIL;
+    fflush_printf("starting rt_cleanup: level=%d\n", level);
+
+    switch (level) {
+
+        case RT_CLEANUP_LEVEL_2:
+            fflush_printf("  %d: deleting rt_task\n", RT_CLEANUP_LEVEL_2);
+            if (rt_task_delete(rt_task) != 0) {
+                PRINT_ERR_MSG("unable to delete rt_task");
+                ret_flag = FAIL;
+            }
+
+        case RT_CLEANUP_LEVEL_1:
+
+            for (i=0; i<NUM_COMEDI_DEV; i++) {
+                fflush_printf("  %d: closing comedi device %d\n", RT_CLEANUP_LEVEL_1, i);
+                if (comedi_close(comedi_info[i].device)!=0) {
+                    PRINT_ERR_MSG("unable to close comedi device");
+                    ret_flag = FAIL;
+                }
+            }
+
+        default:
+            break;
     }
-    
-  case RT_CLEANUP_LEVEL_1:
-   
-    for (i=0; i<NUM_COMEDI_DEV; i++) {
-        fflush_printf("  %d: closing comedi device %d\n", RT_CLEANUP_LEVEL_1, i);
-        if (comedi_close(comedi_info[i].device)!=0) {
-            PRINT_ERR_MSG("unable to close comedi device");
-            ret_flag = FAIL;
-        }
-    }
 
-  default:
-    break;
-  }
+    fflush_printf("rt_cleanup complete\n");
 
-  fflush_printf("rt_cleanup complete\n");
-
-  return ret_flag;
+    return ret_flag;
 }
-*/
 
 // -------------------------------------------------------------------
 // Function: ain_to_phys
@@ -1285,7 +1369,6 @@ int rt_cleanup(int level, comedi_info_t comedi_info[], RT_TASK *rt_task)
 //
 // -------------------------------------------------------------------
 
-/*
 int ain_to_phys(lsampl_t data, comedi_info_t comedi_info, float *volts)
 {
   float max_rng;
@@ -1309,7 +1392,6 @@ int ain_to_phys(lsampl_t data, comedi_info_t comedi_info, float *volts)
 
   return SUCCESS;
 }
-*/
 
 // -----------------------------------------------------------------
 // Function: reassign_sigint 

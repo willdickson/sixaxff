@@ -38,7 +38,7 @@
 #define DEV1_NAME "/dev/comedi1"
 #define AIN_DEV 1
 #define AIN_SUBDEV 0
-#define AIN_ZERO_NUM 500
+#define AIN_ZERO_NUM 100
 #define AIN_ZERO_DT 0.01
 #define AIN_FILT_LPCUT 2.0
 #define CAL_FILE_PATH "FT8652.cal"
