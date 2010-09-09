@@ -81,8 +81,7 @@ state_t dynamics_func(
 // 
 // ----------------------------------------------------------------
 int integrator(
-        state_t  state_curr,
-        state_t *state_next,
+        state_t *state,
         float force, 
         float mass, 
         float damping, 
@@ -98,31 +97,33 @@ int integrator(
 
         case INTEG_RKUTTA: // Integrate using Runge-Kutta method
 
-            x.pos = state_curr.pos;
-            x.vel = state_curr.vel;
+            x.pos = state -> pos;
+            x.vel = state -> vel;
             k0 = dynamics_func(x,force,mass,damping);
 
-            x.pos = state_curr.pos + k0.pos*dt/2.0;
-            x.vel = state_curr.vel + k0.vel*dt/2.0;
+            x.pos = state -> pos + k0.pos*dt/2.0;
+            x.vel = state -> vel + k0.vel*dt/2.0;
             k1 = dynamics_func(x,force,mass,damping);
 
-            x.pos = state_curr.pos + k1.pos*dt/2.0;
-            x.vel = state_curr.vel + k1.vel*dt/2.0;
+            x.pos = state -> pos + k1.pos*dt/2.0;
+            x.vel = state -> vel + k1.vel*dt/2.0;
             k2 = dynamics_func(x,force,mass,damping);
 
-            x.pos = state_curr.pos + k2.pos*dt;
-            x.vel = state_curr.vel + k2.vel*dt;
+            x.pos = state -> pos + k2.pos*dt;
+            x.vel = state -> vel + k2.vel*dt;
             k3 = dynamics_func(x,force,mass,damping);
 
-            state_next -> pos = state_curr.pos + (dt/6.0)*(k0.pos + 2.0*k1.pos + 2.0*k2.pos + k3.pos);
-            state_next -> vel = state_curr.vel + (dt/6.0)*(k0.vel + 2.0*k1.vel + 2.0*k2.vel + k3.vel);
+            state -> pos = state -> pos + (dt/6.0)*(k0.pos + 2.0*k1.pos + 2.0*k2.pos + k3.pos);
+            state -> vel = state -> vel + (dt/6.0)*(k0.vel + 2.0*k1.vel + 2.0*k2.vel + k3.vel);
             break;
 
         case INTEG_EULER: // Integrate using Euler method
 
-            k0 = dynamics_func(state_curr,force,mass,damping);
-            state_next -> pos = state_curr.pos + dt*k0.pos;
-            state_next -> vel = state_curr.vel + dt*k0.vel;
+            x.pos = state -> pos;
+            x.vel = state -> vel;
+            k0 = dynamics_func(x,force,mass,damping);
+            state -> pos = state -> pos + dt*k0.pos;
+            state -> vel = state -> vel + dt*k0.vel;
             break;
 
         default: // Error unkown integration method

@@ -211,11 +211,12 @@ extern int get_ain(
         float ain[]
         );
 
-// Read torque from yaw torque sensor
-extern int get_torq(
-        comedi_info_t comedi_info[], 
-        config_t config, 
-        float *torq
+// Get forces and torques fomr sensor
+extern int get_ft(
+        Calibration *cal,
+        comedi_info_t comedi_info[],
+        config_t config,
+        float ft[]
         );
 
 // Convert analog input value to voltage
@@ -227,7 +228,7 @@ extern int ain_to_phys(
 
 // Update yaw dynamics state vector one timestep
 extern int update_state( 
-        state_t *state, 
+        state_t state[], 
         double t,
         ft_info_t *ft_info, 
         comedi_info_t comedi_info[], 

@@ -348,7 +348,6 @@ static void *sixaxff_thread(void *args)
         return 0;
     }
 
-
     // Initialize rt_task
     fflush_printf("Initializing rt_task \n");
     rt_task = rt_task_init_schmod(nam2num("MOTOR"),0, 0, 0, SCHED_FIFO, 0xF);
@@ -374,21 +373,23 @@ static void *sixaxff_thread(void *args)
 
         now_ns = rt_get_time_ns();
 
+        // Update dynamic state
+        if (update_state(state, t, &ft_info, comedi_info,config) != SUCCESS) {
+            PRINT_ERR_MSG("updating dynamic state failed");
+            err_flag |= RT_TASK_ERROR;
+            break;
+        }
+
+        ///////////////////////////////////////////////////////////
+        // Update motor index array
+        if (update_ind(motor_ind,kine,i,state,config) != SUCCESS) {
+            PRINT_ERR_MSG("updating motor indices failed");
+            err_flag |= RT_TASK_ERROR;
+            break;
+        }
+        ///////////////////////////////////////////////////////////
+
     /*
-
-    // Update dynamic state
-    if (update_state(state, t, &ft_info, comedi_info,config) != SUCCESS) {
-    PRINT_ERR_MSG("updating dynamic state failed");
-    err_flag |= RT_TASK_ERROR;
-    break;
-    }
-
-    // Update motor index array
-    if (update_ind(motor_ind,kine,i,state,config) != SUCCESS) {
-    PRINT_ERR_MSG("updating motor indices failed");
-    err_flag |= RT_TASK_ERROR;
-    break;
-    }
     // Update motor positions
     if (update_motor(motor_ind, comedi_info, config) != SUCCESS) {
     PRINT_ERR_MSG("updating motor positions failed");
@@ -894,90 +895,92 @@ int init_ft_info(ft_info_t *ft_info, config_t config)
 // Return: SUCCESS or FAIL
 //
 // ---------------------------------------------------------------------- 
-
-/*
 int update_state(
-    state_t *state, 
-    double t,
-    torq_info_t *torq_info,
-    comedi_info_t comedi_info[], 
-    config_t config
-    )
+        state_t state[], 
+        double t,
+        ft_info_t *ft_info,
+        comedi_info_t comedi_info[], 
+        config_t config
+        )
 {
-  float dt;
-  float torq_raw;
-  float torq_diff;
-  float torq_highpass;
-  float torq_filt;
-  int rval;
+    int i;
+    int ff_ind;
+    float dt;
+    float ft_raw[6];
+    float ft_filt[6];
+    int rval;
 
-  // Get time step in secs
-  dt = ((float)config.dt)*NS2S;
-  
-  // Get data from  torque sensor and zero 
-  if (get_torq(comedi_info, config, &torq_raw) != SUCCESS) {
-    PRINT_ERR_MSG("error reading torque");
-    return FAIL;
-  }
-  torq_raw = torq_raw-(torq_info->zero);
+    // Get time step in secs
+    dt = ((float)config.dt)*NS2S;
+
+    // Get data from  torque sensor and zero 
+    if (get_ft(ft_info -> cal, comedi_info, config, ft_raw) != SUCCESS) {
+        PRINT_ERR_MSG("error reading torque");
+        return FAIL;
+    }
 
   ///////////////////////////////////////////////////////////////////
   // Constant torque test  - set torque to some known value.
-  // torq_raw = 0.015;
-  // torq_raw = torq_raw + 0.015;
+  //for (i=0; i<NUM_FF; i++) {
+  //    ff_ind = config.ff_ft[i];
+  //    ft_raw[ff_ind] = 0.001;
+  //}
   ///////////////////////////////////////////////////////////////////
-
-  // Apply deadband about zero to limit drift
-  if (fabsf(torq_raw) <= config.yaw_torq_deadband*(torq_info->std)) {
-      torq_raw = 0.0;
-  }
-  // If we are inside start up window set torque to zero
-  if (t < (double)config.startup_t) {
-      torq_raw = 0.0;
-  }
-
-  // Highpass filter torque
-  if (config.yaw_filt_hpcut > 0.0) {
-      torq_diff = torq_raw - (torq_info->raw);
-      torq_highpass = highpass_filt1(torq_diff,torq_info->highpass,config.yaw_filt_hpcut,dt);
-  }
-  else {
-      torq_highpass = torq_raw;
-  }
   
-  // Lowpass filter torque
-  torq_filt = lowpass_filt1(torq_highpass,torq_info->last,config.yaw_filt_lpcut,dt);
 
-  // Update torq_info structure
-  torq_info->last = torq_filt;
-  torq_info->raw = torq_raw;
-  torq_info->highpass = torq_highpass;
+  // If we are inside start up wff_indow set the force feedback forces/torques to zero
+  if (t < (double)config.startup_t) {
+      for (i=0; i<NUM_FF; i++) {
+          ff_ind = config.ff_ft[i];
+          ft_raw[ff_ind] = 0.0;
+      }
+  }
+
+  // Lowpass filter forces and torques 
+  for (i=0; i<6; i++) {
+      ft_filt[i] = lowpass_filt1(
+              ft_raw[i], 
+              (ft_info->ft_last)[i], 
+              config.ain_filt_lpcut,
+              dt
+              );
+  }
+
+  // Update ft_info structure
+  for (i=0; i<6; i++) {
+      (ft_info -> ft_last)[i] = ft_filt[i];
+      (ft_info -> ft_raw)[i] = ft_raw[i];
+  }
+
 
   // Update dynamic state - only if force-feedback is turned on
   if (config.ff_flag == FF_ON) {
 
-    // Set previous state to current state
-    state[0] = state[1];
-    
-    // Integrate one time step
-    rval = integrator(
-        state[1],
-        &state[1],
-        torq_filt,
-        config.yaw_inertia, 
-        config.yaw_damping, 
-        dt,
-        config.integ_type
-        );
-    if (rval != SUCCESS ) {
-      PRINT_ERR_MSG("integrator failed");
-      return FAIL;
-    }
+      for (i=0; i<NUM_FF; i++) {
+
+          // Set previous state to current state
+          state[i].pos_prev = state[i].pos;
+          state[i].vel_prev = state[i].vel;
+
+          // Integrate one time step
+          ff_ind = config.ff_ft[i];
+          rval = integrator(
+                  &state[i],
+                  ft_filt[ff_ind],
+                  config.ff_mass[i], 
+                  config.ff_damping[i], 
+                  dt,
+                  config.ff_integ_type
+                  );
+          if (rval != SUCCESS ) {
+              PRINT_ERR_MSG("integrator failed");
+              return FAIL;
+          }
+      }
   }
- 
+
   return SUCCESS;
 }
-*/
 
 // -----------------------------------------------------------------------
 // Function: set_sensor_zero 
@@ -1156,33 +1159,35 @@ int get_ain(comedi_info_t comedi_info[], config_t config, float ain[])
 }
 
 // ------------------------------------------------------------------
-// Function: get_torq
+// Function: get_ft
 //
-// Purpose: Read yaw torque in Nm from torque sensor.
+// Purpose: Read forces and torques N and Nm from six axis sensor.
 //
 // Arguments:
 //   comedi_info  = daq/dio device information structure
 //   config       = system configuration structure
-//   torq         = pointer to float for torque value
+//   ft           = array for returning force and torque data 
 //
 // Return: SUCCESS or FAIL
 //
 // ------------------------------------------------------------------
 
-/*
-int get_torq(comedi_info_t comedi_info[], config_t config, float *torq)
+int get_ft(Calibration *cal, comedi_info_t comedi_info[], config_t config, float ft[])
 {
 
-  float ain;
+  float ain[6];
   
-  if (get_ain(comedi_info, config, &ain) != SUCCESS) {
+  // Read analog values from sensor
+  if (get_ain(comedi_info, config, ain) != SUCCESS) {
     PRINT_ERR_MSG("unable to read analog input");
     return FAIL;
   }
-  *torq = ain*config.yaw_volt2torq;
+
+  // Convert analog values to forces and torques
+  sixax_sample2ft(cal,ain,ft);
+
   return SUCCESS;
 }
-*/
 
 // ------------------------------------------------------------------
 // Function: init_comedi

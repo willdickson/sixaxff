@@ -40,8 +40,7 @@
 
 // Integrator - integrate yaw dynamic state one time step
 extern int integrator(
-    state_t state_curr, 
-    state_t *state_next, 
+    state_t *state, 
     float force, 
     float mass, 
     float damping, 
