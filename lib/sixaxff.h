@@ -243,7 +243,7 @@ extern int update_ind(
         motor_ind_t motor_ind[],
         array_t kine, 
         int kine_ind, 
-        state_t *state, 
+        state_t state[], 
         config_t config
         );
 
@@ -276,6 +276,9 @@ extern int set_clks_lo(
         comedi_info_t comedi_info[], 
         config_t config
         );
+
+// Test if motor index corresponds to force feedback motor
+extern int is_ff_motor(int index, config_t config, int *ff_index);
 
 // Reassign sigint signal handler
 extern sighandler_t reassign_sigint(sighandler_t sigint_func);

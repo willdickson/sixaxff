@@ -93,6 +93,10 @@ int integrator(
     state_t k0,k1,k2,k3;
     int ret_flag = SUCCESS;
 
+    // Set previous state to current state
+    state -> pos_prev = state -> pos;
+    state -> vel_prev = state -> vel;
+
     switch (method) {
 
         case INTEG_RKUTTA: // Integrate using Runge-Kutta method
@@ -149,8 +153,9 @@ state_t dynamics_func(state_t state_in, float force, float mass, float damping)
 {
     state_t state_out;
     state_out.pos = state_in.vel;
-    // Linear drag
     state_out.vel = force/mass - (damping/mass)*state_in.vel;
+    state_out.pos_prev = state_in.pos; 
+    state_out.vel_prev = state_in.vel;
     return state_out;
 }
 

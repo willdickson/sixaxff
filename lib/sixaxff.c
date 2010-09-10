@@ -757,64 +757,81 @@ int update_motor(
 //
 // ---------------------------------------------------------------------
 
-/*
 int update_ind(
-    int motor_ind[][2],
-    array_t kine, 
-    int kine_ind,
-    state_t *state, 
-    config_t config
-    )
+        motor_ind_t motor_ind[],
+        array_t kine, 
+        int kine_ind,
+        state_t state[], 
+        config_t config
+        )
 {
-  int i;
-  int ind;
-  int kine_num;
-  int motor_num; 
+    int i;
+    int ind;
+    int kine_num=0;
+    int motor_num; 
+    int ff_test;
+    int ff_index;
 
-  // Set current indices to previous indices 
-  for (i=0; i<config.num_motor; i++) {
-    motor_ind[i][0] = motor_ind[i][1];
-  }
-
-  // Set current index
-  kine_num = 0;
-  for (i=0; i<config.num_motor; i++) {
-    if (i == config.yaw_motor)  {
-      // This is the yaw motor 
-      if (config.ff_flag == FF_ON) {
-        // Force-feedback is on - get index from current state
-        ind = (int)((RAD2DEG/config.yaw_ind2deg)*state[1].pos);
-        motor_num = config.yaw_motor;
-      }
-      else {
-        // Force-feedback is off - get index from kinematics
-        motor_num = config.yaw_motor;
-        if (get_array_val(kine,kine_ind,motor_num,&ind) != SUCCESS) {
-          PRINT_ERR_MSG("problem accessing kine array");
-          return FAIL;
-        } 
-        // Set position in state
-        state[0].pos = config.yaw_ind2deg*DEG2RAD*ind;
-        state[1].pos = config.yaw_ind2deg*DEG2RAD*ind;
-      }
+    // Set previous indices to current indices 
+    for (i=0; i<config.num_motor; i++) {
+        motor_ind[i].prev = motor_ind[i].curr;
     }
-    else { 
-      // This is a wing motor
-      motor_num = config.kine_map[kine_num];
 
-      // Get index from kine array
-      if (get_array_val(kine,kine_ind,motor_num,&ind) != SUCCESS) {
-        PRINT_ERR_MSG("problem accessing kine array");
-        return FAIL;
-      }
-      kine_num += 1;
-    } 
-    motor_ind[motor_num][1] = ind;
-  }
-  return SUCCESS;
+    // Loop over motors
+    for (i=0; i<config.num_motor; i++) {
+        ff_test = is_ff_motor(i,config,&ff_index);
+        if (ff_test == TRUE) {
+            // This is a force feedback motor
+            motor_num = config.ff_motor[ff_index];
+            if (config.ff_flag[ff_index]==FF_ON) {
+                // Force-feedback is on - get index from current state
+                ind = (int) (state[ff_index].pos/config.ff_ind2unit[ff_index]);
+            }
+            else {
+                // Force-feedback is off - get index from kinematics
+                if (get_array_val(kine, kine_ind, motor_num, &ind) != SUCCESS) {
+                    PRINT_ERR_MSG("problem accessing kine array");
+                    return FAIL;
+                } 
+                // Set position in state structure
+                state[ff_index].pos_prev = state[ff_index].pos;
+                state[ff_index].pos = config.ff_ind2unit[ff_index]*ind;
+            }
+        }
+        else { 
+            // This is not a force feedback motor 
+            motor_num = config.kine_map[kine_num];
+            // Get index from kine array
+            if (get_array_val(kine,kine_ind,motor_num,&ind) != SUCCESS) {
+                PRINT_ERR_MSG("problem accessing kine array");
+                return FAIL;
+            }
+        } 
+        motor_ind[motor_num].curr = ind;
+        kine_num += 1;
+    }
+    return SUCCESS;
 }
-*/
 
+// --------------------------------------------------------------------
+// Function: is_ff_motor
+//
+// Tests whether or not the given index corresponds to a force feed back
+// motor.
+// --------------------------------------------------------------------
+int is_ff_motor(int index, config_t config, int *ff_index)
+{
+    int i;
+    int ff_test = FALSE;
+    for (i=0; i<NUM_FF; i++) {
+        if (config.ff_motor[i] == index) {
+            ff_test = TRUE;
+            *ff_index = i;
+            break;
+        }
+    } 
+    return ff_test;
+}
 
 // ---------------------------------------------------------------------
 // Function: init_ind
@@ -919,67 +936,59 @@ int update_state(
         return FAIL;
     }
 
-  ///////////////////////////////////////////////////////////////////
-  // Constant torque test  - set torque to some known value.
-  //for (i=0; i<NUM_FF; i++) {
-  //    ff_ind = config.ff_ft[i];
-  //    ft_raw[ff_ind] = 0.001;
-  //}
-  ///////////////////////////////////////////////////////////////////
-  
-
-  // If we are inside start up wff_indow set the force feedback forces/torques to zero
-  if (t < (double)config.startup_t) {
-      for (i=0; i<NUM_FF; i++) {
-          ff_ind = config.ff_ft[i];
-          ft_raw[ff_ind] = 0.0;
-      }
-  }
-
-  // Lowpass filter forces and torques 
-  for (i=0; i<6; i++) {
-      ft_filt[i] = lowpass_filt1(
-              ft_raw[i], 
-              (ft_info->ft_last)[i], 
-              config.ain_filt_lpcut,
-              dt
-              );
-  }
-
-  // Update ft_info structure
-  for (i=0; i<6; i++) {
-      (ft_info -> ft_last)[i] = ft_filt[i];
-      (ft_info -> ft_raw)[i] = ft_raw[i];
-  }
+    ///////////////////////////////////////////////////////////////////
+    // Constant torque test  - set torque to some known value.
+    //for (i=0; i<NUM_FF; i++) {
+    //    ff_ind = config.ff_ft[i];
+    //    ft_raw[ff_ind] = 0.001;
+    //}
+    ///////////////////////////////////////////////////////////////////
 
 
-  // Update dynamic state - only if force-feedback is turned on
-  if (config.ff_flag == FF_ON) {
+    // If we are inside start up wff_indow set the force feedback forces/torques to zero
+    if (t < (double)config.startup_t) {
+        for (i=0; i<NUM_FF; i++) {
+            ff_ind = config.ff_ft[i];
+            ft_raw[ff_ind] = 0.0;
+        }
+    }
 
-      for (i=0; i<NUM_FF; i++) {
+    // Lowpass filter forces and torques 
+    for (i=0; i<6; i++) {
+        ft_filt[i] = lowpass_filt1(
+                ft_raw[i], 
+                (ft_info->ft_last)[i], 
+                config.ain_filt_lpcut,
+                dt
+                );
+    }
 
-          // Set previous state to current state
-          state[i].pos_prev = state[i].pos;
-          state[i].vel_prev = state[i].vel;
+    // Update ft_info structure
+    for (i=0; i<6; i++) {
+        (ft_info -> ft_last)[i] = ft_filt[i];
+        (ft_info -> ft_raw)[i] = ft_raw[i];
+    }
 
-          // Integrate one time step
-          ff_ind = config.ff_ft[i];
-          rval = integrator(
-                  &state[i],
-                  ft_filt[ff_ind],
-                  config.ff_mass[i], 
-                  config.ff_damping[i], 
-                  dt,
-                  config.ff_integ_type
-                  );
-          if (rval != SUCCESS ) {
-              PRINT_ERR_MSG("integrator failed");
-              return FAIL;
-          }
-      }
-  }
-
-  return SUCCESS;
+    // Update dynamic state - only if force-feedback is turned on
+    if (config.ff_flag == FF_ON) {
+        for (i=0; i<NUM_FF; i++) {
+            // Integrate one time step
+            ff_ind = config.ff_ft[i];
+            rval = integrator(
+                    &state[i],
+                    ft_filt[ff_ind],
+                    config.ff_mass[i], 
+                    config.ff_damping[i], 
+                    dt,
+                    config.ff_integ_type
+                    );
+            if (rval != SUCCESS ) {
+                PRINT_ERR_MSG("integrator failed");
+                return FAIL;
+            }
+        }
+    }
+    return SUCCESS;
 }
 
 // -----------------------------------------------------------------------
