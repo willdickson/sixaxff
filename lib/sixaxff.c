@@ -380,39 +380,34 @@ static void *sixaxff_thread(void *args)
             break;
         }
 
-        ///////////////////////////////////////////////////////////
         // Update motor index array
         if (update_ind(motor_ind,kine,i,state,config) != SUCCESS) {
             PRINT_ERR_MSG("updating motor indices failed");
             err_flag |= RT_TASK_ERROR;
             break;
         }
-        ///////////////////////////////////////////////////////////
 
-    /*
-    // Update motor positions
-    if (update_motor(motor_ind, comedi_info, config) != SUCCESS) {
-    PRINT_ERR_MSG("updating motor positions failed");
-    err_flag |= RT_TASK_ERROR;
-    break;
-    }
+        // Update motor positions
+        if (update_motor(motor_ind, comedi_info, config) != SUCCESS) {
+            PRINT_ERR_MSG("updating motor positions failed");
+            err_flag |= RT_TASK_ERROR;
+            break;
+        }
 
-    // Update data
-    if (update_data(data,i,t,state,torq_info) != SUCCESS) {
-    PRINT_ERR_MSG("updating data arrays failed");
-    err_flag |= RT_TASK_ERROR;
-    break;
-    }
+        // Update data
+        if (update_data(data,i,t,state,ft_info) != SUCCESS) {
+            PRINT_ERR_MSG("updating data arrays failed");
+            err_flag |= RT_TASK_ERROR;
+            break;
+        }
 
-    // Sleep for CLOCK_HI_NS and then set clock lines low
-    rt_sleep_until(nano2count(now_ns + (RTIME) CLOCK_HI_NS));
-    if (set_clks_lo(comedi_info, config) != SUCCESS) {
-    PRINT_ERR_MSG("setting dio clks failed");
-    err_flag |= RT_TASK_ERROR;
-    break;
-    }
-
-    */
+        // Sleep for CLOCK_HI_NS and then set clock lines low
+        rt_sleep_until(nano2count(now_ns + (RTIME) CLOCK_HI_NS));
+        if (set_clks_lo(comedi_info, config) != SUCCESS) {
+            PRINT_ERR_MSG("setting dio clks failed");
+            err_flag |= RT_TASK_ERROR;
+            break;
+        }
 
         // Check if end has been set to 1 by SIGINT handler
         if (end == 1) {
@@ -433,16 +428,16 @@ static void *sixaxff_thread(void *args)
 
     // Set status information to final values before exiting
     update_status(
-    kine.nrow-1,
-    t,
-    state,
-    ft_info,
-    config.ff_ft,
-    motor_ind,
-    RT_STOPPED,
-    err_flag,
-    RT_LOCK_WAIT
-    );
+            kine.nrow-1,
+            t,
+            state,
+            ft_info,
+            config.ff_ft,
+            motor_ind,
+            RT_STOPPED,
+            err_flag,
+            RT_LOCK_WAIT
+            );
 
 
     // Leave realtime
@@ -450,14 +445,12 @@ static void *sixaxff_thread(void *args)
     munlockall();
     fflush_printf("\nleaving hard real-time\n");
 
-
     // Clean up
     if (rt_cleanup(RT_CLEANUP_ALL, comedi_info, rt_task)!=SUCCESS) {
         PRINT_ERR_MSG("rt_cleanup failed");
     }
 
     end = 1;
-
     return 0;
 }
 
@@ -603,38 +596,40 @@ void update_status(
 //
 // --------------------------------------------------------------------- 
 
-/*
 int update_data(
-    data_t data, 
-    int ind, 
-    double t,
-    state_t *state, 
-    torq_info_t torq_info
-    )
+        data_t data, 
+        int ind, 
+        double t,
+        state_t state[], 
+        ft_info_t ft_info
+        )
 {
-  if (set_array_val(data.t,ind,0,&t) != SUCCESS) {
-    PRINT_ERR_MSG("setting time array value failed");
-    return FAIL;
-  }
-  if (set_array_val(data.pos,ind,0,&state[1].pos) != SUCCESS) {
-    PRINT_ERR_MSG("setting pos array value failed");
-    return FAIL;
-  }
-  if (set_array_val(data.vel,ind,0,&state[1].vel) != SUCCESS) {
-    PRINT_ERR_MSG("setting vel array value failed");
-    return FAIL;
-  }
-  if (set_array_val(data.torq,ind,0,&torq_info.last) != SUCCESS) {
-    PRINT_ERR_MSG("setting torq array value failed");
-    return FAIL;
-  }
-  if (set_array_val(data.torq,ind,1,&torq_info.raw) != SUCCESS) {
-      PRINT_ERR_MSG("setting torq array value failed");
-      return FAIL;
-  }
-  return SUCCESS;
+    int i;
+    // Set time
+    if (set_array_val(data.t,ind,0,&t) != SUCCESS) {
+        PRINT_ERR_MSG("setting time array value failed");
+        return FAIL;
+    }
+    // Set position and velocities
+    for (i=0; i<NUM_FF; i++) {
+        if (set_array_val(data.pos,ind,i,&(state[i].pos)) != SUCCESS) {
+            PRINT_ERR_MSG("setting pos array value failed");
+            return FAIL;
+        }
+        if (set_array_val(data.vel,ind,i,&(state[i].vel)) != SUCCESS) {
+            PRINT_ERR_MSG("setting vel array value failed");
+            return FAIL;
+        }
+    }
+    // Set for and torque values
+    for (i=0;i<6;i++) {
+        if (set_array_val(data.ft,ind,i,&(ft_info.ft_last[i])) != SUCCESS) {
+            PRINT_ERR_MSG("setting torq array value failed");
+            return FAIL;
+        }
+    }
+    return SUCCESS;
 }
-*/
 
 
 // ---------------------------------------------------------------------
@@ -650,27 +645,25 @@ int update_data(
 //
 // ---------------------------------------------------------------------
 
-/*
 int set_clks_lo(comedi_info_t comedi_info[], config_t config)
 {
-  int rval;
-  int i;
+    int rval;
+    int i;
 
-  for (i=0; i<config.num_motor; i++) {
-    rval = comedi_dio_write(
-        comedi_info[config.dio_dev].device,
-        config.dio_subdev,
-        config.dio_clk[i],
-        DIO_LO
-        );
-    if (rval != 1) {
-      PRINT_ERR_MSG("comedi_dio_write failed");
-      return FAIL;
+    for (i=0; i<config.num_motor; i++) {
+        rval = comedi_dio_write(
+                comedi_info[config.dio_dev].device,
+                config.dio_subdev,
+                config.dio_clk[i],
+                DIO_LO
+                );
+        if (rval != 1) {
+            PRINT_ERR_MSG("comedi_dio_write failed");
+            return FAIL;
+        }
     }
-  }
-  return SUCCESS;
+    return SUCCESS;
 }
-*/
 
 // ---------------------------------------------------------------------
 // Function: update_motor
@@ -688,54 +681,51 @@ int set_clks_lo(comedi_info_t comedi_info[], config_t config)
 // Return: SUCCESS or FAIL
 //
 // ---------------------------------------------------------------------
-
-/*
 int update_motor(
-    int motor_ind[][2], 
-    comedi_info_t comedi_info[], 
-    config_t config
-    )
+        motor_ind_t motor_ind[], 
+        comedi_info_t comedi_info[], 
+        config_t config
+        )
 {
-  int i;
-  int dpos;
-  int dir_val;
-  int rval;
+    int i;
+    int dpos;
+    int dir_val;
+    int rval;
 
-  for (i=0; i<config.num_motor; i++) {
-    
-    dpos = motor_ind[i][1] - motor_ind[i][0];
-    
-    // Set direction DIO
-    dir_val = dpos >= 1 ? DIO_HI : DIO_LO;
-    rval = comedi_dio_write(
-        comedi_info[config.dio_dev].device,
-        config.dio_subdev,
-        config.dio_dir[i],
-        dir_val
-        );
-    if (rval!=1) {
-      PRINT_ERR_MSG("comedi write dio dir failed");
-      return FAIL;
-    }
+    for (i=0; i<config.num_motor; i++) {
 
-    // Set clock DIO
-    if (abs(dpos) > 0) {
-      rval = comedi_dio_write(
-          comedi_info[config.dio_dev].device,
-          config.dio_subdev,
-          config.dio_clk[i],
-          DIO_HI
-          );
-      if (rval != 1) {
-        PRINT_ERR_MSG("conedi write dio clk failed");
-        return FAIL;
-      }
-    }
-  } // End for i
+        dpos = motor_ind[i].curr - motor_ind[i].prev;
 
-  return SUCCESS;
+        // Set direction DIO
+        dir_val = dpos >= 1 ? DIO_HI : DIO_LO;
+        rval = comedi_dio_write(
+                comedi_info[config.dio_dev].device,
+                config.dio_subdev,
+                config.dio_dir[i],
+                dir_val
+                );
+        if (rval!=1) {
+            PRINT_ERR_MSG("comedi write dio dir failed");
+            return FAIL;
+        }
+
+        // Set clock DIO
+        if (abs(dpos) > 0) {
+            rval = comedi_dio_write(
+                    comedi_info[config.dio_dev].device,
+                    config.dio_subdev,
+                    config.dio_clk[i],
+                    DIO_HI
+                    );
+            if (rval != 1) {
+                PRINT_ERR_MSG("conedi write dio clk failed");
+                return FAIL;
+            }
+        }
+    } // End for i
+
+    return SUCCESS;
 }
-*/
 
 // ---------------------------------------------------------------------
 // Function: update_ind
@@ -756,7 +746,6 @@ int update_motor(
 // Return: SUCCESS or FAIL
 //
 // ---------------------------------------------------------------------
-
 int update_ind(
         motor_ind_t motor_ind[],
         array_t kine, 
@@ -779,6 +768,7 @@ int update_ind(
 
     // Loop over motors
     for (i=0; i<config.num_motor; i++) {
+        // Test whether or not this is a force feedback motor
         ff_test = is_ff_motor(i,config,&ff_index);
         if (ff_test == TRUE) {
             // This is a force feedback motor
@@ -921,7 +911,7 @@ int update_state(
         )
 {
     int i;
-    int ff_ind;
+    int ft_ind;
     float dt;
     float ft_raw[6];
     float ft_filt[6];
@@ -938,18 +928,19 @@ int update_state(
 
     ///////////////////////////////////////////////////////////////////
     // Constant torque test  - set torque to some known value.
-    //for (i=0; i<NUM_FF; i++) {
-    //    ff_ind = config.ff_ft[i];
-    //    ft_raw[ff_ind] = 0.001;
-    //}
+    // DEBUG //////////////////////////////////////////////////////////
+    for (i=0; i<NUM_FF; i++) {
+        ft_ind = config.ff_ft[i];
+        ft_raw[ft_ind] = 0.1;
+    }
     ///////////////////////////////////////////////////////////////////
 
 
-    // If we are inside start up wff_indow set the force feedback forces/torques to zero
+    // If we are inside start up wft_indow set the force feedback forces/torques to zero
     if (t < (double)config.startup_t) {
         for (i=0; i<NUM_FF; i++) {
-            ff_ind = config.ff_ft[i];
-            ft_raw[ff_ind] = 0.0;
+            ft_ind = config.ff_ft[i];
+            ft_raw[ft_ind] = 0.0;
         }
     }
 
@@ -970,13 +961,13 @@ int update_state(
     }
 
     // Update dynamic state - only if force-feedback is turned on
-    if (config.ff_flag == FF_ON) {
-        for (i=0; i<NUM_FF; i++) {
+    for (i=0; i<NUM_FF; i++) {
+        if (config.ff_flag[i] == FF_ON) {
             // Integrate one time step
-            ff_ind = config.ff_ft[i];
+            ft_ind = config.ff_ft[i];
             rval = integrator(
                     &state[i],
-                    ft_filt[ff_ind],
+                    ft_filt[ft_ind],
                     config.ff_mass[i], 
                     config.ff_damping[i], 
                     dt,

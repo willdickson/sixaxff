@@ -267,7 +267,7 @@ extern int update_data(
         data_t data, 
         int ind, 
         double t, 
-        state_t *state, 
+        state_t state[], 
         ft_info_t ft_info
         ); 
 
