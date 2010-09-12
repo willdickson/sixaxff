@@ -33,16 +33,16 @@ Functions:
 
 integrator         = 2nd order integrator
 dynamics_func      = function for yaw dynamics
+lowpass_filt1      = first order lowpass filter
+highpass_filt1     = first order highpas filter
 init_array         = initializes array object
 free_array         = frees array object
 set_array_val      = sets array element value
 get_array_val      = gets array  element value
 print_array        = prints array values
-lowpass_filt1      = firat order lowpass filter
 print_config       = prints configuration structure
 print_err_msg      = prints error messages
 fflush_printf      = printf followed by fflush(stdout)
-get_max_motor      = returns maximum allowed number of motors
 get_max_dt         = returns maximum allowed real-time period
 get_min_dt         = returns minimum allowed real-time period
 get_clock_hi_ns    = returns the clock high time in ns
@@ -630,7 +630,6 @@ void fflush_printf(const char *format, ...)
     fflush(stdout);
     return;
 }
-
 
 // Simple functions for getting constants to python ctypes interface
 int define_max_motor(void) {return MAX_MOTOR;};

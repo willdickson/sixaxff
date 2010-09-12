@@ -34,6 +34,18 @@
 #include "sixax.h"
 #include "util.h"
 
+// ---------------------------------------------------------------------
+// FUNCTION: sixax_init_cal
+//
+// Initializes six axis sensor calibration.
+//
+// Arguments:
+//   **cal   =  pointer to sensor Calibration sturcture pointer
+//   **cal_file_path = full path to sensor calibration file.
+//   tool_trans = translation and rotation for center of six axis sensor
+//              = {dx,dy,dz,ax,ay,az}
+//              units for the transformation are set below. 
+// ---------------------------------------------------------------------
 int sixax_init_cal(Calibration **cal, char *cal_file_path, float tool_trans[])
 {
     short rtn_flag;    
@@ -81,14 +93,8 @@ int sixax_init_cal(Calibration **cal, char *cal_file_path, float tool_trans[])
     }
 
     // Set tool transform.
-    // This line is only required if you want to move or rotate the sensor's coordinate system.
-    // This example tool transform translates the coordinate system 20 mm along the Z-axis 
-    // and rotates it 45 degrees about the X-axis.
-    
-    // This sample transform includes a translation along the Z-axis and a rotation about the X-axis.
-    // float tool_trans[6]={0,0,20,45,0,0};
-    
-    rtn_flag=SetToolTransform(*cal,tool_trans,"mm","degrees");
+    //rtn_flag=SetToolTransform(*cal,tool_trans,"mm","degrees");
+    rtn_flag=SetToolTransform(*cal,tool_trans,"m","radians");
     switch (rtn_flag) {
         case 0: 
             // successful completion
@@ -127,6 +133,11 @@ int sixax_init_cal(Calibration **cal, char *cal_file_path, float tool_trans[])
     return SUCCESS;
 } 
 
+// ----------------------------------------------------------------------------
+// FUNCTION: sixax_free_cal
+//
+// Frees memory allocated to Calibation structue
+// ----------------------------------------------------------------------------
 void sixax_free_cal(Calibration *cal)
 {
     // free memory allocated to Calibration structure
@@ -134,13 +145,54 @@ void sixax_free_cal(Calibration *cal)
     return;
 }
 
+// ----------------------------------------------------------------------------
+// FUNCTION: sixax_set_tooltrans
+//
+// Set tool transform. Translate or rotate the sensor's coordinate system.
+// This sample transform includes a translation along the Z-axis and a rotation
+// about the X-axis.  float tool_trans[6]={0,0,20,45,0,0};
+// ----------------------------------------------------------------------------
+int sixax_set_tooltrans(Calibration *cal, float tooltrans[])
+{
+    int rtn_flag;
+    //rtn_flag=SetToolTransform(cal,tooltrans,"mm","degrees");
+    rtn_flag=SetToolTransform(cal,tooltrans,"m","radians");
+    switch (rtn_flag) {
+        case 0: 
+            // successful completion
+            break;  
+        case 1: 
+            PRINT_ERR_MSG("Invalid Calibration struct\n"); 
+            return FAIL;
+        case 2: 
+            PRINT_ERR_MSG("Invalid distance units\n"); 
+            return FAIL;
+        case 3: 
+            PRINT_ERR_MSG("Invalid angle units\n"); 
+            return FAIL;
+        default: 
+            PRINT_ERR_MSG("Unknown error\n"); 
+            return FAIL;
+    }
+    return SUCCESS;
+} 
+
+// ----------------------------------------------------------------------------
+// FUNCTION: sixax_set_bias
+//
+// Stores an unload measurement; this removes the effect of the tooling weight
+// ----------------------------------------------------------------------------
 int sixax_set_bias(Calibration *cal, float bias[])
 {
-    // store an unloaded measurement; this removes the effect of tooling weight
     Bias(cal,bias);
     return SUCCESS;
 } 
 
+// ----------------------------------------------------------------------------
+// FUNCTION: sixax_sample2ft
+//
+// Converts a measurement into forces and torques.
+// ----------------------------------------------------------------------------
 int sixax_sample2ft(Calibration *cal, float sample[], float ft[])
 {
     // convert a loaded measurement into forces and torques
@@ -148,6 +200,11 @@ int sixax_sample2ft(Calibration *cal, float sample[], float ft[])
     return SUCCESS;
 }
 
+// ----------------------------------------------------------------------------
+// FUNCTION: sixax_print_calinfor
+//
+// Displays information from the calibration file
+// ----------------------------------------------------------------------------
 void sixax_print_calinfo(Calibration *cal)
 {
 

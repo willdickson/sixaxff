@@ -39,6 +39,7 @@
 
 extern int sixax_init_cal(Calibration **cal, char *cal_file_path, float tooltrans[]); 
 extern int sixax_set_bias(Calibration *cal, float bias[]); 
+extern int sixax_set_tooltrans(Calibration *cal, float tooltrans[]);
 extern int sixax_sample2ft(Calibration *cal, float sample[], float ft[]); 
 extern void sixax_print_calinfo(Calibration *cal);
 extern void sixax_free_cal(Calibration *cal);
