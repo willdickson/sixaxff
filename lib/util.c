@@ -528,11 +528,19 @@ void print_config(config_t config)
     }
     printf("}\n");
 
-    // Print 6 axis sensor tool transformation
-    printf("  ff_tooltrans:        {");
+    // Print basic 6 axis sensor tool transform
+    printf("  ff_basic_tooltrans:  {");
     for (i=0; i<6; i++) {
-        printf("%f", config.ff_tooltrans[i]);
+        printf("%f", config.ff_basic_tooltrans[i]);
         if (i<5) printf(", ");
+    }
+    printf("}\n");
+
+    // Print dynamic 6 axis sensor tool transform 
+    printf("  ff_dyam_tooltrans:   {");
+    for (i=0; i<3; i++) {
+        printf("%d",config.ff_dynam_tooltrans[i]);
+        if (i<2) printf(", ");
     }
     printf("}\n");
 

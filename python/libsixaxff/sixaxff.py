@@ -32,7 +32,6 @@ from libmove_motor import convert2int
 
 lib = ctypes.cdll.LoadLibrary("libsixaxff.so.1")
 
-
 # Constants 
 S2NS = 1.0e9
 MAX_MOTOR = lib.define_max_motor()
@@ -83,7 +82,8 @@ class config_t(ctypes.Structure):
         ('num_motor', ctypes.c_uint),
         ('ff_motor', NUM_FF*ctypes.c_uint),
         ('ff_ft', NUM_FF*ctypes.c_uint),
-        ('ff_tooltrans', 6*ctypes.c_float),
+        ('ff_basic_tooltrans', 6*ctypes.c_float),
+        ('ff_dynam_tooltrans', 3*ctypes.c_int),
         ('ff_mass', NUM_FF*ctypes.c_float),
         ('ff_ind2unit', NUM_FF*ctypes.c_float),
         ('ff_axesunits', NUM_FF*ctypes.c_char_p),
@@ -110,12 +110,15 @@ lib.sixaxff.argstype = [
     data_t,
     ctypes.c_void_p,
 ]
+lib.print_config.argstype = [config_t]
+lib.sixax_read_calinfo.argstype = [ctypes.c_char_p]
 
-
-lib.print_config.argstype = [
-    config_t,
-]
-
+def print_calinfo(cal_file_path):
+    """
+    Display calibration information.
+    """
+    lib.sixax_read_calinfo(cal_file_path)
+    return
 
 def get_c_array_struct(x):
     """

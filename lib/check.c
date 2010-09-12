@@ -205,6 +205,28 @@ int check_ranges(config_t config)
         }
     }
 
+    // Check dynamic tool transform
+    if (config.ff_dynam_tooltrans[0] < 0) {
+        PRINT_ERR_MSG("ff_dynam_tooltran[0] < 0");
+        flag = FAIL;
+    }
+    if (config.ff_dynam_tooltrans[0] >= NUM_FF) {
+        PRINT_ERR_MSG("ff_dynam_tooltran[0] >= NUM_FF");
+        flag = FAIL;
+    }
+    if (config.ff_dynam_tooltrans[1] < 0) {
+        PRINT_ERR_MSG("ff_dynam_tooltran[1] < 0");
+        flag = FAIL;
+    }
+    if (config.ff_dynam_tooltrans[1] > 2) {
+        PRINT_ERR_MSG("ff_dynam_tooltran[1] > 2");
+        flag = FAIL;
+    }
+    if (abs(config.ff_dynam_tooltrans[2]) > 1) {
+        PRINT_ERR_MSG("ff_dynam_tooltran[2] should be -1,0,+1");
+        flag = FAIL;
+    }
+
     // Check masses
     for (i=0; i<NUM_FF; i++) {
         if (config.ff_mass[i] <=0) {

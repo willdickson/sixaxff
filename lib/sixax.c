@@ -54,7 +54,7 @@ int sixax_init_cal(Calibration **cal, char *cal_file_path, float tool_trans[])
     // create Calibration struct
     *cal=createCalibration(cal_file_path,index);
     if (cal==NULL) {
-        PRINT_ERR_MSG("Specified calibration could not be loaded.\n");
+        PRINT_ERR_MSG("Specified calibration could not be loaded.");
         return FAIL;
     }
 
@@ -65,13 +65,13 @@ int sixax_init_cal(Calibration **cal, char *cal_file_path, float tool_trans[])
             // successful completion
             break;  
         case 1: 
-                PRINT_ERR_MSG("Invalid Calibration struct\n"); 
+                PRINT_ERR_MSG("Invalid Calibration struct"); 
                 return FAIL;
         case 2: 
-                PRINT_ERR_MSG("Invalid force units\n"); 
+                PRINT_ERR_MSG("Invalid force units"); 
                 return FAIL;
         default: 
-                PRINT_ERR_MSG("Unknown error\n"); 
+                PRINT_ERR_MSG("Unknown error"); 
                 return FAIL;
     }
 
@@ -82,13 +82,13 @@ int sixax_init_cal(Calibration **cal, char *cal_file_path, float tool_trans[])
             // successful completion
             break;  
         case 1: 
-            PRINT_ERR_MSG("Invalid Calibration struct\n"); 
+            PRINT_ERR_MSG("Invalid Calibration struct"); 
             return FAIL;
         case 2: 
-            PRINT_ERR_MSG("Invalid torque units\n"); 
+            PRINT_ERR_MSG("Invalid torque units"); 
             return FAIL;
         default: 
-            PRINT_ERR_MSG("Unknown error\n"); 
+            PRINT_ERR_MSG("Unknown error"); 
             return FAIL;
     }
 
@@ -100,34 +100,35 @@ int sixax_init_cal(Calibration **cal, char *cal_file_path, float tool_trans[])
             // successful completion
             break;  
         case 1: 
-            PRINT_ERR_MSG("Invalid Calibration struct\n"); 
+            PRINT_ERR_MSG("Invalid Calibration struct"); 
             return FAIL;
         case 2: 
-            PRINT_ERR_MSG("Invalid distance units\n"); 
+            PRINT_ERR_MSG("Invalid distance units"); 
             return FAIL;
         case 3: 
-            PRINT_ERR_MSG("Invalid angle units\n"); 
+            PRINT_ERR_MSG("Invalid angle units"); 
             return FAIL;
         default: 
-            PRINT_ERR_MSG("Unknown error\n"); 
+            PRINT_ERR_MSG("Unknown error"); 
             return FAIL;
     }
 
-    // Temperature compensation is on by default if it is available.
-    // To explicitly disable temperature compensation, uncomment the following code
-    rtn_flag = SetTempComp(*cal,FALSE);                   // disable temperature compensation
+    // Temperature compensation is on by default if it is available.  To
+    // explicitly disable temperature compensation, the following code disables
+    // temperature compensation
+    rtn_flag = SetTempComp(*cal,FALSE);
     switch (rtn_flag) {
         case 0: 
             // successful completion
             break;  
         case 1: 
-            PRINT_ERR_MSG("Invalid Calibration struct\n"); 
+            PRINT_ERR_MSG("Invalid Calibration struct"); 
             return FAIL;
         case 2: 
-            PRINT_ERR_MSG("Temperature Compensation not available on this transducer\n"); 
+            PRINT_ERR_MSG("Temperature Compensation not available on this transducer"); 
             return FAIL;
         default: 
-            PRINT_ERR_MSG("Unknown error\n"); 
+            PRINT_ERR_MSG("Unknown error"); 
             return FAIL;
     }
     return SUCCESS;
@@ -280,3 +281,27 @@ void sixax_print_calinfo(Calibration *cal)
 
     return;
 }
+
+// ----------------------------------------------------------------------------
+// Function display_calinfo
+//
+// Reads calibration file and displays calibration information.
+// ----------------------------------------------------------------------------
+void sixax_read_calinfo(char *cal_file_path)
+{
+    int rtn_flag;
+    Calibration *cal;
+    float tooltrans[] = {0.0,0.0,0.0,0.0,0.0,0.0};
+
+    // Read calibration file and initialize calibration structure
+    rtn_flag = sixax_init_cal(&cal,cal_file_path,tooltrans);
+    if (rtn_flag == FAIL) {
+        PRINT_ERR_MSG("Unable to initialize sensor calibration");
+        return;
+    }
+    // Print information and then free calibration structure
+    sixax_print_calinfo(cal);
+    sixax_free_cal(cal);
+    return ;
+}
+

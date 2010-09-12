@@ -43,5 +43,6 @@ extern int sixax_set_tooltrans(Calibration *cal, float tooltrans[]);
 extern int sixax_sample2ft(Calibration *cal, float sample[], float ft[]); 
 extern void sixax_print_calinfo(Calibration *cal);
 extern void sixax_free_cal(Calibration *cal);
+extern void sixax_read_calinfo(char *cal_file_path); 
 
 #endif // INC_FTCONVERT_H_

@@ -373,13 +373,12 @@ static void *sixaxff_thread(void *args)
 
         now_ns = rt_get_time_ns();
 
-        // TODO /////////////////////////////////////////////////////////////
-        //
-        // Set six axis sensor tool transform based on current position of the
-        // robot. Need to set this dynamically to get the force in the forward
-        // direction as the sensor pitches with the robot.
-        //
-        // /////////////////////////////////////////////////////////////////// 
+        // Update six axis sensor tool transformation
+        if (update_tooltrans(state, &ft_info, config) != SUCCESS) {
+            PRINT_ERR_MSG("updating tool transformation failed");
+            err_flag |= RT_TASK_ERROR;
+            break;
+        }
 
         // Update dynamic state
         if (update_state(state, t, &ft_info, comedi_info,config) != SUCCESS) {
@@ -462,6 +461,45 @@ static void *sixaxff_thread(void *args)
     return 0;
 }
 
+// ------------------------------------------------------------------
+// Function: update_tooltrans
+//
+// Purpose updates six axis sensor tool transform using the dynmic
+// part of the tool transformation.
+//
+// ------------------------------------------------------------------
+int update_tooltrans(
+        state_t state[], 
+        ft_info_t *ft_info, 
+        config_t config
+        )
+{
+    int i;
+    int axis;
+    float sign;
+    float angle;
+    float tooltrans[6];
+
+    // Get axis, angle, and sign for dynamic tool transform
+    // Note, pos is assumed to be an angle given in radians
+    axis = config.ff_dynam_tooltrans[1];
+    sign = (float)config.ff_dynam_tooltrans[2];
+    angle = state[config.ff_dynam_tooltrans[0]].pos;
+
+    // First apply basic tool transform
+    for (i=0; i<6; i++) {
+        tooltrans[i] = config.ff_basic_tooltrans[i];
+    }
+    // Next apply dynamic tool transform
+    tooltrans[3+axis] += sign*angle;
+
+    // Update tool transform in sensor calibration
+    if (sixax_set_tooltrans(ft_info->cal, tooltrans) != SUCCESS) {
+        PRINT_ERR_MSG("failed to set six axis sensor tool transformation");
+        return FAIL; 
+    }
+    return SUCCESS;
+}
 
 // -------------------------------------------------------------------
 // Function: init_status_vals
@@ -883,7 +921,11 @@ int init_ft_info(ft_info_t *ft_info, config_t config)
     }
     ft_info -> cal = NULL;
     fflush_printf("reading sensor calibration file: %s\n", config.cal_file_path);
-    rtn_val = sixax_init_cal(&(ft_info -> cal), config.cal_file_path, config.ff_tooltrans);
+    rtn_val = sixax_init_cal(
+            &(ft_info -> cal), 
+            config.cal_file_path, 
+            config.ff_basic_tooltrans
+            );
     if (rtn_val == FAIL) {
         PRINT_ERR_MSG("unable to initialize six axis sensor calibration");
         return FAIL;
@@ -1097,7 +1139,7 @@ int get_ain_zero(
     }
     for (i=0; i<6; i++) {
         ain_zero[i] /= (float)config.ain_zero_num;
-        fflush_printf("ain_zero[%d]: %f(V)\n", i, ain_zero[i]);
+        fflush_printf("  ain_zero[%d]: %f(V)\n", i, ain_zero[i]);
     }
 
     // Compute ain standard deviation
@@ -1112,7 +1154,7 @@ int get_ain_zero(
     for (i=0; i<6; i++) {
         ain_std[i] /= (float) config.ain_zero_num;
         ain_std[i] = sqrtf(ain_std[i]);
-        fflush_printf("ain_std[%d]: %f(V)\n", i, ain_std[i]);
+        fflush_printf("  ain_std[%d]: %f(V)\n", i, ain_std[i]);
     }
 
     return ret_flag;

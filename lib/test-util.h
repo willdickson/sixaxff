@@ -50,7 +50,8 @@
 #define KINE_LABEL {"rotation_0", "deviation_0", "deviation_1", "rotation_1", "stroke_0", "stroke_1", "pitch", "translation"}
 #define NUM_MOTOR 8
 #define FF_FT {0,5}
-#define FF_TOOLTRANS {0.0, 0.0, 0.0, 0.0, 0.0, 0.0}
+#define FF_BASIC_TOOLTRANS {0.0, 0.0, 0.0, 0.0, 0.0, 0.0}
+#define FF_DYNAM_TOOLTRANS {0,2,-1}
 #define FF_MOTOR {6,7}
 #define FF_MASS {1.0, 2.0}
 #define FF_IND2UNIT {1.5, 2.5}

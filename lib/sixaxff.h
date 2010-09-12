@@ -46,25 +46,25 @@ Author: Will Dickson
 
 #define TRUE 1
 #define FALSE 0
-#define SUCCESS 0
-#define FAIL -1
-#define DIO_HI 1
-#define DIO_LO 0
-#define NUM_COMEDI_DEV 2
-#define MAX_MOTOR 10
-#define MAX_DIO 23
-#define ERR_SZ 200
-#define MAX_DT_NS 10000000   // 100 Hz 
-#define MIN_DT_NS 100000     // 10 kHz
+#define SUCCESS 0            // Succesful function call 
+#define FAIL -1              // Failed function call
+#define DIO_HI 1             // Digital IO high
+#define DIO_LO 0             // Digital IO low
+#define NUM_COMEDI_DEV 2     // Number of comedi devices
+#define MAX_MOTOR 10         // Maximum allowed number of motors
+#define MAX_DIO 23           // Maximum digital io line
+#define ERR_SZ 200           // Maximum size for error messages
+#define MAX_DT_NS 10000000   // Maximum realtime loop dt (100 Hz)
+#define MIN_DT_NS 100000     // Minimum realtime loop dt (10 kHz)
 #define CLOCK_HI_NS 60000    // Time in ns for which clock is high 
 #define RAD2DEG (180.0/M_PI) // Convert radians to degrees
 #define DEG2RAD (M_PI/180.0) // Convert degrees to radians
 #define NS2S 1.0e-9          // Convert nanoseconds to seconds 
 #define S2NS (1.0/NS2S)      // Convert seconds to nanoseconds
 
-#define NUM_FF 2    // Number of force feedback motors
-#define FF_ON 0     // Force-feedback on
-#define FF_OFF 1    // Force-feedback off
+#define NUM_FF 2             // Number of force feedback motors
+#define FF_ON 0              // Force-feedback on
+#define FF_OFF 1             // Force-feedback off
 
 #define INTEG_EULER 0      // Const for integration by Euler method 
 #define INTEG_RKUTTA 1     // Const for integration by Runge-Kutta
@@ -116,7 +116,8 @@ typedef struct {
     unsigned int num_motor;           // Total number of motors
     unsigned int ff_motor[NUM_FF];    // Force feedback axes 
     unsigned int ff_ft[NUM_FF];       // Indices of feedback force/torque values 
-    float ff_tooltrans[6];            // Sensor tool transformation
+    float ff_basic_tooltrans[6];      // Basic sensor tool transformation
+    int ff_dynam_tooltrans[3];        // Dynamic sensor tool transformation (ff#(0,NUM_FF), axis#(0,1,2), sign(-1,+1,0))
     float ff_mass[NUM_FF];            // Mass (or inertia) for force feedback axes
     float ff_ind2unit[NUM_FF];        // Conversion from motor indices to axes units
     char *ff_axesunits[NUM_FF];       // Unit labels for force feedback axes
@@ -186,8 +187,10 @@ extern int init_comedi(
         comedi_info_t comedi_info[], 
         config_t config
         );
+
 // Initialize ft_info
 extern int init_ft_info(ft_info_t *ft_info, config_t config);
+
 
 // Get zero value for yaw torque analog input channel
 extern int get_ain_zero(
@@ -224,6 +227,13 @@ extern int ain_to_phys(
         lsampl_t data, 
         comedi_info_t comedi_info, 
         float *volts
+        );
+
+// Update six axis sensor tool transform
+extern int update_tooltrans(
+        state_t state[], 
+        ft_info_t *ft_info,
+        config_t config
         );
 
 // Update yaw dynamics state vector one timestep

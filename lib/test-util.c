@@ -50,7 +50,8 @@ int init_test_config(config_t *config)
     char *kine_label[] = KINE_LABEL;
     unsigned int ff_ft[] = FF_FT;
     unsigned int ff_motor[] = FF_MOTOR;
-    float ff_tooltrans[] = FF_TOOLTRANS;
+    float ff_basic_tooltrans[] = FF_BASIC_TOOLTRANS;
+    int ff_dynam_tooltrans[] = FF_DYNAM_TOOLTRANS;
     float ff_mass[] = FF_MASS;
     float ff_ind2unit[] = FF_IND2UNIT;
     char *ff_axesunits[NUM_FF] = FF_AXESUNITS;
@@ -85,7 +86,10 @@ int init_test_config(config_t *config)
         (config -> ff_flag)[i] = ff_flag[i];
     }
     for (i=0;i<6;i++) {
-        (config -> ff_tooltrans)[i] = ff_tooltrans[i];
+        (config -> ff_basic_tooltrans)[i] = ff_basic_tooltrans[i];
+    }
+    for (i=0;i<3;i++) {
+        (config -> ff_dynam_tooltrans)[i] = ff_dynam_tooltrans[i];
     }
     config -> ff_integ_type = FF_INTEG_TYPE;
     config -> dt = DT_NS;
