@@ -32,6 +32,91 @@ from libmove_motor import convert2int
 
 lib = ctypes.cdll.LoadLibrary("libsixaxff.so.1")
 
+
+# Constants 
+S2NS = 1.0e9
+MAX_MOTOR = lib.define_max_motor()
+MAX_DT = lib.define_max_dt()
+MIN_DT = lib.define_min_dt()
+CLOCK_HI_NS = lib.define_clock_hi_ns()
+INTEG_EULER = lib.define_integ_euler()
+INTEG_RKUTTA = lib.define_integ_rkutta()
+INTEG_UNKNOWN = lib.define_integ_unknown()
+EMPTY_ARRAY = lib.define_empty_array()
+INT_ARRAY = lib.define_int_array()
+FLT_ARRAY = lib.define_flt_array()
+DBL_ARRAY = lib.define_dbl_array()
+UNKOWN_ARRAY = lib.define_unknown_array()
+SUCCESS = lib.define_success()
+FAIL = lib.define_fail()
+FF_ON = lib.define_ff_on()
+FF_OFF = lib.define_ff_off()
+NUM_FF = lib.define_num_ff()
+
+
+# Structures
+class array_t(ctypes.Structure):
+    _fields_ = [
+        ('data', ctypes.c_void_p), 
+        ('nrow', ctypes.c_int), 
+        ('ncol', ctypes.c_int),
+        ('s0', ctypes.c_int),
+        ('s1', ctypes.c_int),
+        ('type', ctypes.c_int), 
+        ]
+
+class config_t(ctypes.Structure):
+    _fields_ = [
+        ('dev_name', NUM_FF*ctypes.c_char_p),
+        ('ain_dev', ctypes.c_uint),
+        ('ain_subdev', ctypes.c_uint),
+        ('ain_zero_num', ctypes.c_uint),
+        ('ain_zero_dt', ctypes.c_float),
+        ('ain_filt_lpcut', ctypes.c_float),
+        ('cal_file_path', ctypes.c_char_p),
+        ('dio_dev', ctypes.c_uint),
+        ('dio_subdev', ctypes.c_uint),
+        ('dio_clk', MAX_MOTOR*ctypes.c_uint),
+        ('dio_dir', MAX_MOTOR*ctypes.c_uint),
+        ('kine_map', MAX_MOTOR*ctypes.c_uint),
+        ('kine_label', MAX_MOTOR*ctypes.c_char_p),
+        ('num_motor', ctypes.c_uint),
+        ('ff_motor', NUM_FF*ctypes.c_uint),
+        ('ff_ft', NUM_FF*ctypes.c_uint),
+        ('ff_tooltrans', 6*ctypes.c_float),
+        ('ff_mass', NUM_FF*ctypes.c_float),
+        ('ff_ind2unit', NUM_FF*ctypes.c_float),
+        ('ff_axesunits', NUM_FF*ctypes.c_char_p),
+        ('ff_damping', NUM_FF*ctypes.c_float),
+        ('ff_flag', NUM_FF*ctypes.c_uint),
+        ('ff_integ_type', ctypes.c_uint),
+        ('dt', ctypes.c_uint),
+        ('startup_t', ctypes.c_float),
+        ]
+
+class data_t(ctypes.Structure):
+    _fields_ = [
+        ('t', array_t),
+        ('pos', array_t),
+        ('vel', array_t),
+        ('ft', array_t),
+        ]
+
+# Functions 
+lib.sixaxff.restype = ctypes.c_int
+lib.sixaxff.argstype = [
+    array_t,
+    config_t,
+    data_t,
+    ctypes.c_void_p,
+]
+
+
+lib.print_config.argstype = [
+    config_t,
+]
+
+
 def get_c_array_struct(x):
     """
     Get the C array structure associated with the scipy or numpy array.
@@ -52,122 +137,25 @@ def get_c_array_struct(x):
         raise ValueError, "array must be of type INT_ARRAY, FLT_ARRAY or DBL_ARRAY" 
     return x_struct
 
+
 def create_config_struct(config):
     """
     Create c configuration structure
     """
+
+    ######################################################################
+    # DEBUG NOTE: 
+    # 
+    # Should probably check that all the required fields are here
+    #####################################################################
     config_struct = config_t()
-    config_struct.dev_name = config['dev_name']
-    config_struct.ain_subdev = config['ain_subdev']
-    config_struct.dio_subdev = config['dio_subdev']
-    config_struct.num_motor = config['num_motor']
-    config_struct.yaw_motor = config['yaw_motor']
-    config_struct.dio_clk = config['dio_clk']
-    config_struct.dio_dir = config['dio_dir']
-    config_struct.kine_map = config['kine_map']
-    config_struct.dio_disable = config['dio_disable']
-    config_struct.yaw_ain = config['yaw_ain']
-    config_struct.yaw_ain_zero_dt = config['yaw_ain_zero_dt']
-    config_struct.yaw_ain_zero_num = config['yaw_ain_zero_num'] 
-    config_struct.yaw_volt2torq = config['yaw_volt2torq']
-    config_struct.yaw_inertia = config['yaw_inertia']
-    config_struct.yaw_ind2deg = config['yaw_ind2deg']
-    config_struct.yaw_torq_lim = config['yaw_torq_lim']
-    config_struct.yaw_torq_deadband = config['yaw_torq_deadband']
-    config_struct.yaw_filt_lpcut = config['yaw_filt_lpcut']
-    config_struct.yaw_filt_hpcut = config['yaw_filt_hpcut']
-    config_struct.yaw_damping = config['yaw_damping']
-    config_struct.dt = int(S2NS*config['dt'])
-    config_struct.integ_type = int(config['integ_type'])
-    config_struct.startup_t = float(config['startup_t'])
-    config_struct.ff_flag = int(config['ff_flag'])
+    for key in config:
+        if key == 'dt':
+            value = int(S2NS*config[key])
+        else:
+            value = config[key]
+        setattr(config_struct,key,value)
     return config_struct
-
-# Constants 
-S2NS = 1.0e9
-MAX_MOTOR = lib.define_max_motor()
-MAX_DT = lib.define_max_dt()
-MIN_DT = lib.define_min_dt()
-CLOCK_HI_NS = lib.define_clock_hi_ns()
-INTEG_EULER = lib.define_integ_euler()
-INTEG_RKUTTA = lib.define_integ_rkutta()
-INTEG_UNKNOWN = lib.define_integ_unknown()
-EMPTY_ARRAY = lib.define_empty_array()
-INT_ARRAY = lib.define_int_array()
-FLT_ARRAY = lib.define_flt_array()
-DBL_ARRAY = lib.define_dbl_array()
-UNKOWN_ARRAY = lib.define_unknown_array()
-SUCCESS = lib.define_success()
-FAIL = lib.define_fail()
-FF_ON = lib.define_ff_on()
-FF_OFF = lib.define_ff_off()
-
-
-# Structures
-class array_t(ctypes.Structure):
-    _fields_ = [
-        ('data', ctypes.c_void_p), 
-        ('nrow', ctypes.c_int), 
-        ('ncol', ctypes.c_int),
-        ('s0', ctypes.c_int),
-        ('s1', ctypes.c_int),
-        ('type', ctypes.c_int), 
-        ]
-
-class config_t(ctypes.Structure):
-    _fields_ = [
-        ('dev_name', ctypes.c_char_p),
-        ('ain_dev', ctypes.c_uint),
-        ('dio_dev', ctypes.c_uint),
-        ('ain_subdev', ctypes.c_uint),
-        ('dio_subdev', ctypes.c_uint),
-        ('num_motor', ctypes.c_int),
-        ('yaw_motor', ctypes.c_int),
-        ('dio_clk', MAX_MOTOR*ctypes.c_int),
-        ('dio_dir', MAX_MOTOR*ctypes.c_int),
-        ('kine_map', MAX_MOTOR*ctypes.c_int),
-        ('motor_id_map', MAX_MOTOR*ctypes.c_int),
-        ('dio_disable', ctypes.c_int),
-        ('yaw_ain', ctypes.c_uint),
-        ('yaw_ain_zero_dt', ctypes.c_float),
-        ('yaw_ain_zero_num', ctypes.c_uint),
-        ('yaw_volt2torq',ctypes.c_float),
-        ('yaw_inertia', ctypes.c_float),
-        ('yaw_ind2deg', ctypes.c_float),
-        ('yaw_torq_lim', ctypes.c_float),
-        ('yaw_torq_deadband', ctypes.c_float),
-        ('yaw_filt_lpcut', ctypes.c_float),
-        ('yaw_filt_hpcut', ctypes.c_float),
-        ('yaw_damping', ctypes.c_float),
-        ('dt', ctypes.c_int),
-        ('integ_type', ctypes.c_int),
-        ('startup_t', ctypes.c_float),
-        ('ff_flag', ctypes.c_int),
-        ]
-
-
-class data_t(ctypes.Structure):
-    _fields_ = [
-        ('t', array_t),
-        ('pos', array_t),
-        ('vel', array_t),
-        ('torq', array_t),
-        ]
-
-# Functions 
-lib.sixaxff.restype = ctypes.c_int
-lib.sixaxff.argstype = [
-    array_t,
-    config_t,
-    data_t,
-    ctypes.c_void_p,
-]
-
-
-lib.print_config.argstype = [
-    config_t,
-]
-
 
 def sixaxff_c_wrapper(kine, config):
     """
@@ -194,16 +182,16 @@ def sixaxff_c_wrapper(kine, config):
     # Time, position, velocity, and torque arrays for return data
     n = kine.shape[0]
     t = scipy.zeros((n,1), dtype = scipy.dtype('float64'))
-    pos = scipy.zeros((n,1), dtype = scipy.dtype('float32'))
-    vel = scipy.zeros((n,1), dtype = scipy.dtype('float32'))
-    torq = scipy.zeros((n,2), dtype = scipy.dtype('float32'))
+    pos = scipy.zeros((n,2), dtype = scipy.dtype('float32'))
+    vel = scipy.zeros((n,2), dtype = scipy.dtype('float32'))
+    ft = scipy.zeros((n,6), dtype = scipy.dtype('float32'))
 
     # Create c data structure
     data_struct = data_t()
     data_struct.t = get_c_array_struct(t)
     data_struct.pos = get_c_array_struct(pos)
     data_struct.vel = get_c_array_struct(vel)
-    data_struct.torq = get_c_array_struct(torq)
+    data_struct.ft = get_c_array_struct(ft)
     
     # Create array for ending positions
     end_pos = (ctypes.c_int*config['num_motor'])()
@@ -215,7 +203,7 @@ def sixaxff_c_wrapper(kine, config):
 
     end_pos = scipy.array(end_pos)
 
-    return t, pos, vel, torq, end_pos
+    return t, pos, vel, ft, end_pos
 
 
 def print_config(config):

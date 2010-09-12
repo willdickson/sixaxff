@@ -648,3 +648,4 @@ int define_success(void) {return SUCCESS;};
 int define_fail(void) {return FAIL;};
 int define_ff_on(void) {return FF_ON;};
 int define_ff_off(void) {return FF_OFF;};
+int define_num_ff(void) {return NUM_FF;};

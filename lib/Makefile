@@ -66,7 +66,8 @@ CFLAGS= -fPIC -c
 CSTANDARD= -std=gnu89
 DARRICK=-D ARRICK
 
-all: $(TARGET) test devel
+#all: $(TARGET) test devel
+all: $(TARGET) devel
 
 $(TARGET): $(OBJ)
 	${CC} -shared -W1,-soname,$@ -o $@.$(RELEASE_NUM) $? -lm $(LXRT_LDFLAGS) 
