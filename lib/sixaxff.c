@@ -373,6 +373,14 @@ static void *sixaxff_thread(void *args)
 
         now_ns = rt_get_time_ns();
 
+        // TODO /////////////////////////////////////////////////////////////
+        //
+        // Set six axis sensor tool transform based on current position of the
+        // robot. Need to set this dynamically to get the force in the forward
+        // direction as the sensor pitches with the robot.
+        //
+        // /////////////////////////////////////////////////////////////////// 
+
         // Update dynamic state
         if (update_state(state, t, &ft_info, comedi_info,config) != SUCCESS) {
             PRINT_ERR_MSG("updating dynamic state failed");
