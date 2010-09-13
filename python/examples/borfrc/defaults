@@ -1,5 +1,5 @@
 [sixaxff]
-motor_maps = motor_maps.conf
+motor_map = motor_map.conf
 sensor_cal = FT8652.cal
 comedi_conf = comedi.conf
 ff_conf =  ff.conf

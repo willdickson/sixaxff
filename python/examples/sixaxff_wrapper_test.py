@@ -13,10 +13,11 @@ import pylab
 import libsixaxff
 
 RAD2DEG = 180.0/scipy.pi
-N=10000
+DEG2RAD = scipy.pi/180.0
+N=50000
 
 # Read in data from motor map
-mapfile = 'sixaxff_motor_maps.conf'
+mapfile = 'motor_map.conf'
 motor_maps = libmove_motor.read_motor_maps(mapfile)
 clk_pins, dir_pins = libmove_motor.get_clkdir_pins(motor_maps)
 motor_num_list = libmove_motor.get_motor_num_list(motor_maps)
@@ -28,7 +29,7 @@ config = {
     'dev_name'           : ('/dev/comedi0','/dev/comedi1'),
     'ain_dev'            : 1,
     'ain_subdev'         : 0,
-    'ain_zero_num'       : 50,
+    'ain_zero_num'       : 100,
     'ain_zero_dt'        : 0.01,
     'ain_filt_lpcut'     : 10.0,
     'cal_file_path'      : '/home/wbd/.borfrc/sensor_cal/FT8652.cal',
@@ -41,13 +42,13 @@ config = {
     'num_motor'          : num_motor,
     'ff_motor'           : (6,7), 
     'ff_ft'              : (0,4),
-    'ff_basic_tooltrans' : (1.0, 2.0, 3.0, 4.0, 5.0, 6.0),
-    'ff_dynam_tooltrans' : (0,2,1),
+    'ff_basic_tooltrans' : (0.0, 0.0, 0.0, 0.0, 0.0, -60.0*DEG2RAD),
+    'ff_dynam_tooltrans' : (0,2,0),
     'ff_mass'            : (1.0, 2.0),
     'ff_ind2unit'        : (3.0, 4.0),
     'ff_axesunits'       : ('deg', 'm'),
     'ff_damping'         : (0.0, 0.0),
-    'ff_flag'            : (libsixaxff.FF_ON,libsixaxff.FF_ON),
+    'ff_flag'            : (libsixaxff.FF_OFF,libsixaxff.FF_OFF),
     'ff_integ_type'      : libsixaxff.INTEG_RKUTTA,
     'dt'                 : 1.0/3000.0,
     'startup_t'          : 0.0,

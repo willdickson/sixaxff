@@ -979,10 +979,10 @@ int update_state(
     ///////////////////////////////////////////////////////////////////
     // Constant torque test  - set torque to some known value.
     // DEBUG //////////////////////////////////////////////////////////
-    for (i=0; i<NUM_FF; i++) {
-        ft_ind = config.ff_ft[i];
-        ft_raw[ft_ind] = 0.1;
-    }
+    //for (i=0; i<NUM_FF; i++) {
+    //    ft_ind = config.ff_ft[i];
+    //    ft_raw[ft_ind] = 0.1;
+    //}
     ///////////////////////////////////////////////////////////////////
 
 

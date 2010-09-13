@@ -684,7 +684,7 @@ def read_defaults(defaults_file=BORFRC_DIR):
         val = config.get('sixaxff',f)
         file_dict[f] = val
 
-    if not file_dict.has_key('motor_maps'):
+    if not file_dict.has_key('motor_map'):
         raise RuntimeError, 'defaults file does not specify motor maps file'
     if not file_dict.has_key('sensor_cal'):
         raise RuntimeError, 'defaults file does not specify sensor cal file'
@@ -693,7 +693,7 @@ def read_defaults(defaults_file=BORFRC_DIR):
     if not file_dict.has_key('ff_conf'):
         raise RuntimeError, 'defaults file does not specify ff_conf file'
 
-    motor_maps_file = file_dict['motor_maps']
+    motor_maps_file = file_dict['motor_map']
     sensor_cal_file = file_dict['sensor_cal']
     comedi_conf_file = file_dict['comedi_conf']
     ff_conf_file = file_dict['ff_conf']

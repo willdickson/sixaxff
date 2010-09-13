@@ -37,6 +37,7 @@
 #include <stdlib.h>
 #include "ftconfig.h"
 
+
 extern int sixax_init_cal(Calibration **cal, char *cal_file_path, float tooltrans[]); 
 extern int sixax_set_bias(Calibration *cal, float bias[]); 
 extern int sixax_set_tooltrans(Calibration *cal, float tooltrans[]);
