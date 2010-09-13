@@ -47,24 +47,25 @@ BORFRC_DIR = os.path.join(os.environ['HOME'],'.borfrc')
 DFLT_CONFIG_FILE = os.path.join(BORFRC_DIR, 'defaults')
 DFLT_SENSOR_CAL_DIR = os.path.join(BORFRC_DIR,'sensor_cal')
 DFLT_COMEDI_CONF_DIR = os.path.join(BORFRC_DIR, 'comedi_conf')
+DFLT_FF_CONF_DIR = os.path.join(BORFRC_DIR, 'ff_conf')
 DFLT_MOVE_VMAX = 10.0
 DFLT_MOVE_ACCEL = 40.0
 DFLT_MOVE_VMAX_IND = 100.0
 DFLT_MOVE_ACCEL_IND = 400.0
 DFLT_MOVE_DT = 1.0/3000.0
-DFLT_PAUSE_T = 10.0
+DFLT_PAUSE_T = 2.0
 
 class Sixaxff_Base(object):
-
     """
     Base class for Sixaxff 
     """
 
     def __init__(self, 
-                 run_params, 
+                 run_params = {}, 
                  motor_maps_file=None, 
                  sensor_cal_file=None, 
                  comedi_conf_file=None,
+                 ff_conf_file=None,
                  defaults_file=DFLT_CONFIG_FILE,
                  move_vmax=DFLT_MOVE_VMAX,
                  move_accel=DFLT_MOVE_ACCEL,
@@ -76,7 +77,10 @@ class Sixaxff_Base(object):
         # Set default configuratin files:
         if motor_maps_file==None or sensor_cal_file==None or comedi_conf_file==None:
             dflts = read_defaults(defaults_file)
-            dflt_motor_maps_file, dflt_sensor_cal_file, dflt_comedi_conf_file = dflts
+            dflt_motor_maps_file = dflts[0]
+            dflt_sensor_cal_file = dflts[1] 
+            dflt_comedi_conf_file = dflts[2]
+            dflt_ff_conf_file = dflts[3]
 
         # Set motor maps file and read in motor map
         if motor_maps_file == None:
@@ -98,154 +102,175 @@ class Sixaxff_Base(object):
             self.comedi_conf_file = comedi_conf_file
         self.comedi_conf = read_comedi_conf(self.comedi_conf_file)
 
+        # Set force feedback configuration file
+        if ff_conf_file == None:
+            self.ff_conf_file = dflt_ff_conf_file
+        else:
+            self.ff_conf_file = ff_conf_file
+        self.ff_conf = read_ff_conf(self.ff_conf_file)
+
         self.run_params = run_params
         self.move_vmax = move_vmax
         self.move_accel = move_accel
         self.move_dt = move_dt
-        self.config_dict = self.create_config_dict()
-
         if pause_t == None:
             self.pause_t = DFLT_PAUSE_T
         else:
             self.pause_t = pause_t
 
-    def create_config_dict(self):
+    def print_config(self):
+        """
+        Loads configuration dictionary into C structure and displays it.
+        """
+        self.config_dict = self.create_config_dict()
+        libsixaxff.print_config(self.config_dict)
+
+    def create_config_dict(self,type='sixaxff'):
         """
         Create configuration dictionary which is passed to sixaxff_c_wrapper
         """
         config = {}
-        
-        # Add comedi configuration parameters
-        dev_name = self.comedi_conf.keys()
-        dev_name.sort()
-        config['dev_name'] =  tuple(dev_name)
-        ain_found = False 
-        dio_found = False
-        for i, dev_str in enumerate(config['dev_name']):
-            if 'ain_subdev' in self.comedi_conf[dev_str]:
-                config['ain_dev'] = i
-                config['ain_subdev'] = self.comedi_conf[dev_str]['ain_subdev']
-                ain_found = True
-            if 'dio_subdev' in self.comedi_conf[dev_str]:
-                config['dio_dev'] = i
-                config['dio_subdev'] = self.comedi_conf[dev_str]['dio_subdev']
-                dio_found = True
-        assert ain_found, 'analog input sub device not specified in configuration'
-        assert dio_found, 'digital io sub device not specified in configureation'
+        if type == 'sixaxff':
+            # Set calibratin file path
+            config['cal_file_path'] = self.sensor_cal_path
 
-        # Set calibratin file path
-        config['cal_file_path'] = self.sensor_cal_path
+            # Add comedi configuration parameters
+            config['dev_name'] = (
+                    self.comedi_conf['dio_device']['dev_name'], 
+                    self.comedi_conf['ain_device']['dev_name'],
+                    )
+            config['dio_dev'] = 0
+            config['ain_dev'] = 1
+            config['dio_subdev'] = self.comedi_conf['dio_device']['dio_subdev']
+            config['ain_subdev'] = self.comedi_conf['ain_device']['ain_subdev']
+            
+            # Add motor map parameters
+            clk_pins, dir_pins = libmove_motor.get_clkdir_pins(self.motor_maps)
+            config['dio_clk'] = clk_pins
+            config['dio_dir'] = dir_pins
+            motor_num_list = libmove_motor.get_motor_num_list(self.motor_maps)
+            config['kine_map'] = tuple(motor_num_list)
+            num_motor = len(motor_num_list)
+            config['num_motor'] = num_motor
+            motor_num2name = libmove_motor.get_num2name_map(self.motor_maps)
+            kine_label = tuple([motor_num2name[n] for n in motor_num_list])
+            config['kine_label'] = kine_label
 
-        # Add motor map parameters
-        clk_pins, dir_pins = libmove_motor.get_clkdir_pins(self.motor_maps)
-        config['dio_clk'] = clk_pins
-        config['dio_dir'] = dir_pins
-        motor_num_list = libmove_motor.get_motor_num_list(self.motor_maps)
-        config['kine_map'] = tuple(motor_num_list)
-        num_motor = len(motor_num_list)
-        config['num_motor'] = num_motor
-        motor_num2name = libmove_motor.get_num2name_map(self.motor_maps)
-        kine_label = tuple([motor_num2name[n] for n in motor_num_list])
-        config['kine_label'] = kine_label
+            # Add force feedback configuration
+            config.update(self.ff_conf)
+            
+            # Finally, add run parameters
+            config.update(self.run_params)
 
-        #yaw_motor = self.motor_maps['yaw']['number']
-        #yaw_ind2deg = self.motor_maps['yaw']['deg_per_ind']
-        #config['yaw_motor'] = yaw_motor
-        #config['yaw_ind2deg'] = yaw_ind2deg
+        elif type == 'move_motor':
+            # Comedi parameters
+            config['dev_name'] = self.comedi_conf['dio_device']['dev_name']
+            config['dio_subdev'] = self.comedi_conf['dio_device']['dio_subdev']
+            # Add motor map parameters
+            motor_num_list = libmove_motor.get_motor_num_list(self.motor_maps)
+            num_motor = len(motor_num_list)
+            config['num_motor'] = num_motor
+            clk_pins, dir_pins = libmove_motor.get_clkdir_pins(self.motor_maps)
+            config['dio_clk'] = clk_pins
+            config['dio_dir'] = dir_pins
+        else:
+            raise RuntimeError, 'unknown configuration dictionary type'
 
-        ## Add run parameters
-        config.update(self.run_params)
         return config
 
-#    def move_to_pos(self,name_list,pos_list,noreturn=False,at_zero_ind=True,
-#                    vmax=DFLT_MOVE_VMAX, accel=DFLT_MOVE_ACCEL):
-#        """
-#        Move the robot to the given positions in degrees.
-#        """
-#        n = self.num_motors()
-#        pos = scipy.zeros((n,))
-#
-#        if len(pos_list) == len(name_list):
-#            for p, name in zip(pos_list,name_list):
-#                motor_num = self.get_motor_num(name)
-#                pos[motor_num] = p
-#        elif len(pos_list) == 1:
-#            p = pos_list[0]
-#            for name in name_list:
-#                motor_num = self.get_motor_num(name)
-#                pos[motor_num] = p
-#        else:
-#            raise ValueError, 'len(pos_list) must equal len(name_list) or 1'
-#
-#        config = self.config_dict
-#        # Move to kinematics starting positon
-#        print 'moving to position'
-#        if at_zero_ind == True:
-#            zero_pos = libmove_motor.get_zero_indpos_deg(self.motor_maps)
-#        else:
-#            zero_pos = scipy.zeros((n,))
-#        ramps_deg = libmove_motor.get_ramp_moves(zero_pos,
-#                                                 pos,
-#                                                 vmax, 
-#                                                 accel, 
-#                                                 self.move_dt)
-#        ramps_ind = libmove_motor.deg2ind(ramps_deg, self.motor_maps)
-#        end_pos, ret_val = libmove_motor.outscan_kine(ramps_ind,config,self.move_dt)
-#
-#        if noreturn == False:
-#            # Wait until done
-#            ans = raw_input('Press enter to return to zero index position:')
-#            # Return to the zero index position 
-#            print 'returning to zero index positon'
-#            ramps_deg = libmove_motor.get_ramp_moves(pos,
-#                                                     zero_pos,
-#                                                     vmax, 
-#                                                     accel, 
-#                                                     self.move_dt)
-#            ramps_ind = libmove_motor.deg2ind(ramps_deg, self.motor_maps)
-#            end_pos, ret_val = libmove_motor.outscan_kine(ramps_ind,config,self.move_dt)
-#
-#
-#    def move_by_ind(self, name_list, ind_list, noreturn=False,vmax=DFLT_MOVE_VMAX_IND, accel=DFLT_MOVE_ACCEL_IND): 
-#        """ 
-#        Move motor given by motor_name by the specified number of indices.  
-#        """
-#        config=self.config_dict
-#        n = self.num_motors()
-#        zero_pos = scipy.zeros((n,))
-#        next_pos = scipy.zeros((n,))
-#        if len(ind_list) == len(name_list):
-#            for ind, name in zip(ind_list,name_list):
-#                motor_num = self.get_motor_num(name)
-#                next_pos[motor_num] = ind 
-#        elif len(ind_list) == 1:
-#            ind = ind_list[0]
-#            for name in name_list:
-#                motor_num = self.get_motor_num(name)
-#                next_pos[motor_num] = ind 
-#        else:
-#            raise ValueError, 'len(pos_list) must equal len(name_list) or 1'
-#        
-#        ramp_move = libmove_motor.get_ramp_moves(zero_pos,
-#                                               next_pos,
-#                                               vmax,
-#                                               accel,
-#                                               self.move_dt)
-#        ramp_move = libmove_motor.convert2int(ramp_move)
-#        end_pos, ret_val = libmove_motor.outscan_kine(ramp_move,config,self.move_dt)
-#
-#        if noreturn == False:
-#            # Wait until done
-#            ans = raw_input('Press enter to return to starting position:')
-#            print 'returning to starting positon'
-#        
-#            ramp_move = libmove_motor.get_ramp_moves(zero_pos,
-#                                                   -next_pos,
-#                                                   vmax,
-#                                                   accel,
-#                                                   self.move_dt)
-#            ramp_move = libmove_motor.convert2int(ramp_move)
-#            end_pos, ret_val = libmove_motor.outscan_kine(ramp_move,config,self.move_dt)
+    def move_to_pos(self,name_list,pos_list,noreturn=False,at_zero_ind=True,
+                    vmax=DFLT_MOVE_VMAX, accel=DFLT_MOVE_ACCEL):
+        """
+        Move the robot to the given positions in user units.
+        """
+        n = self.num_motors()
+        pos = scipy.zeros((n,))
+
+        if len(pos_list) == len(name_list):
+            for p, name in zip(pos_list,name_list):
+                motor_num = self.get_motor_num(name)
+                pos[motor_num] = p
+        elif len(pos_list) == 1:
+            p = pos_list[0]
+            for name in name_list:
+                motor_num = self.get_motor_num(name)
+                pos[motor_num] = p
+        else:
+            raise ValueError, 'len(pos_list) must equal len(name_list) or 1'
+
+        config = self.create_config_dict(type='move_motor')
+        # Move to kinematics starting positon
+        print 'moving to position'
+        if at_zero_ind == True:
+            zero_pos = libmove_motor.get_zero_indpos_in_unit(self.motor_maps)
+        else:
+            zero_pos = scipy.zeros((n,))
+        ramps_unit = libmove_motor.get_ramp_moves(
+                zero_pos,
+                pos,
+                vmax, 
+                accel, 
+                self.move_dt
+                )
+        ramps_ind = libmove_motor.unit2ind(ramps_unit, self.motor_maps)
+        end_pos, ret_val = libmove_motor.outscan_kine(ramps_ind,config,self.move_dt)
+
+        if noreturn == False:
+            # Wait until done
+            ans = raw_input('Press enter to return to zero index position:')
+            # Return to the zero index position 
+            print 'returning to zero index positon'
+            ramps_unit = libmove_motor.get_ramp_moves(
+                    pos,
+                    zero_pos, 
+                    vmax,
+                    accel, 
+                    self.move_dt
+                    )
+            ramps_ind = libmove_motor.unit2ind(ramps_unit, self.motor_maps)
+            end_pos, ret_val = libmove_motor.outscan_kine(ramps_ind,config,self.move_dt)
+
+
+    def move_by_ind(self, name_list, ind_list, noreturn=False,vmax=DFLT_MOVE_VMAX_IND, accel=DFLT_MOVE_ACCEL_IND): 
+        """ 
+        Move motor given by motor_name by the specified number of indices.  
+        """
+        config=self.create_config_dict(type='move_motor')
+        n = self.num_motors()
+        zero_pos = scipy.zeros((n,))
+        next_pos = scipy.zeros((n,))
+        if len(ind_list) == len(name_list):
+            for ind, name in zip(ind_list,name_list):
+                motor_num = self.get_motor_num(name)
+                next_pos[motor_num] = ind 
+        elif len(ind_list) == 1:
+            ind = ind_list[0]
+            for name in name_list:
+                motor_num = self.get_motor_num(name)
+                next_pos[motor_num] = ind 
+        else:
+            raise ValueError, 'len(pos_list) must equal len(name_list) or 1'
+        
+        ramp_move = libmove_motor.get_ramp_moves(zero_pos,
+                                               next_pos,
+                                               vmax,
+                                               accel,
+                                               self.move_dt)
+        ramp_move = libmove_motor.convert2int(ramp_move)
+        end_pos, ret_val = libmove_motor.outscan_kine(ramp_move,config,self.move_dt)
+
+        if noreturn == False:
+            # Wait until done
+            ans = raw_input('Press enter to return to starting position:')
+            print 'returning to starting positon'
+        
+            ramp_move = libmove_motor.get_ramp_moves(zero_pos,
+                                                   -next_pos,
+                                                   vmax,
+                                                   accel,
+                                                   self.move_dt)
+            ramp_move = libmove_motor.convert2int(ramp_move)
+            end_pos, ret_val = libmove_motor.outscan_kine(ramp_move,config,self.move_dt)
 
     def num_motors(self):
         """
@@ -270,108 +295,99 @@ class Sixaxff_Base(object):
         return motor_names
 
 
-#class Sixaxff(Sixaxff_Base):
-#
-#    """
-#    Sixaxff force feedback device. In this version the kinematics are prescribed.
-#    """
-#
-#    def __init__(self, 
-#                 run_params, 
-#                 motor_maps_file=None, 
-#                 sensor_cal_file=None, 
-#                 comedi_conf_file=None,
-#                 defaults_file=DFLT_CONFIG_FILE,
-#                 move_vmax=DFLT_MOVE_VMAX,
-#                 move_accel=DFLT_MOVE_ACCEL,
-#                 move_dt=DFLT_MOVE_DT,
-#                 pause_t=None):
-#
-#        # Call parent class initialization method
-#        super(Sixaxff,self).__init__(
-#            run_params,
-#            motor_maps_file = motor_maps_file,
-#            sensor_cal_file = sensor_cal_file,
-#            comedi_conf_file = comedi_conf_file,
-#            defaults_file = defaults_file,
-#            move_vmax = move_vmax,
-#            move_accel = move_accel,
-#            move_dt = move_dt,
-#            pause_t = pause_t
-#        )
-#
-#        # Custom initialization
-#        self.kine_deg = None
-#        self.t = None
-#
-#
-#    def run(self, kine_deg=None):
-#        """
-#        Run yaw force-feedback function.
-#        """
-#        if kine_deg == None:
-#            if self.kine_deg == None:
-#                raise RuntimeError, 'no kinematics to run'
-#            else:
-#                kine_deg = self.kine_deg
-#            
-#        config = self.config_dict
-#
-#        # Move to kinematics starting positon
-#        zero_indpos_deg = libmove_motor.get_zero_indpos_deg(self.motor_maps)
-#        start_pos_deg = kine_deg[0,:]
-#        ramps_deg = libmove_motor.get_ramp_moves(zero_indpos_deg,
-#                                                 start_pos_deg,
-#                                                 self.move_vmax, 
-#                                                 self.move_accel, 
-#                                                 self.move_dt)
-#        ramps_ind = libmove_motor.deg2ind(ramps_deg, self.motor_maps)
-#        end_pos, ret_val = libmove_motor.outscan_kine(ramps_ind,config,self.move_dt)
-#
-#        # Sleep to wait for force transients to die down - can effect autozero
-#        time.sleep(self.pause_t)
-#
-#        # Run force-feed back function
-#        kine_ind = libmove_motor.deg2ind(kine_deg, self.motor_maps)
-#        t, pos, vel, torq, end_pos_ind = libsixaxff.sixaxff_c_wrapper(kine_ind, config)
-#        
-#        # Convert positin and velocity from radians to degrees
-#        pos = RAD2DEG*pos
-#        vel = RAD2DEG*vel
-#
-#        # Extract filtered and raw torque data
-#        torq_flt = torq[:,0]
-#        torq_raw = torq[:,1]
-#        
-#        # Return to zero position
-#        end_pos_deg = libmove_motor.ind2deg(end_pos_ind,self.motor_maps)
-#        ramps_deg = libmove_motor.get_ramp_moves(end_pos_deg,
-#                                                 zero_indpos_deg,
-#                                                 self.move_vmax, 
-#                                                 self.move_accel, 
-#                                                 self.move_dt)
-#        ramps_ind = libmove_motor.deg2ind(ramps_deg, self.motor_maps)
-#        end_pos, ret_val = libmove_motor.outscan_kine(ramps_ind,config,self.move_dt)
-#        
-#        # Reset all pwm signal to there default positions. This is a kludge to help
-#        # w/ the fact that we seem to sometimes lose a bit of position in the pwm 
-#        # signals. I am not sure what is causing this - hardware or software. 
-#        # I will need to to some more tests after this next set of experiments.
-#        clkdirpwm.set_pwm_to_default(None)
-#
-#        return t, pos, vel, torq_flt, torq_raw
-#
-#
-#    def set_zero_kine(self, T):
-#        config = self.config_dict
-#        dt = config['dt']
-#        num_motors = self.num_motors()
-#        t = scipy.arange(0.0, (T+dt)/dt)*dt
-#        kine = scipy.zeros((t.shape[0],num_motors))
-#        self.kine_deg = kine
-#        self.t = t
-#
-#
+class Sixaxff(Sixaxff_Base):
+
+    """
+    Sixaxff force feedback device. In this version the kinematics are prescribed.
+    """
+
+    def __init__(self, 
+                 run_params={}, 
+                 motor_maps_file=None, 
+                 sensor_cal_file=None, 
+                 comedi_conf_file=None,
+                 defaults_file=DFLT_CONFIG_FILE,
+                 move_vmax=DFLT_MOVE_VMAX,
+                 move_accel=DFLT_MOVE_ACCEL,
+                 move_dt=DFLT_MOVE_DT,
+                 pause_t=None):
+
+        # Call parent class initialization method
+        super(Sixaxff,self).__init__(
+            run_params,
+            motor_maps_file = motor_maps_file,
+            sensor_cal_file = sensor_cal_file,
+            comedi_conf_file = comedi_conf_file,
+            defaults_file = defaults_file,
+            move_vmax = move_vmax,
+            move_accel = move_accel,
+            move_dt = move_dt,
+            pause_t = pause_t
+        )
+
+        # Custom initialization
+        self.kine = None
+        self.t = None
+
+
+    def run(self, kine=None):
+        """
+        Run yaw force-feedback function.
+        """
+        if kine == None:
+            if self.kine == None:
+                raise RuntimeError, 'no kinematics to run'
+            else:
+                kine = self.kine
+            
+        sixaxff_config = self.create_config_dict(type='sixaxff')
+        move_motor_config = self.create_config_dict(type='move_motor')
+
+        # Move to kinematics starting positon
+        zero_indpos_unit = libmove_motor.get_zero_indpos_in_unit(self.motor_maps)
+        start_pos_unit = kine[0,:]
+        ramps_unit = libmove_motor.get_ramp_moves(zero_indpos_unit,
+                                                 start_pos_unit,
+                                                 self.move_vmax, 
+                                                 self.move_accel, 
+                                                 self.move_dt)
+        ramps_ind = libmove_motor.unit2ind(ramps_unit, self.motor_maps)
+        end_pos, ret_val = libmove_motor.outscan_kine(ramps_ind,move_motor_config,self.move_dt)
+
+        # Sleep to wait for force transients to die down - can effect autozero
+        time.sleep(self.pause_t)
+
+        # Run force-feed back function
+        kine_ind = libmove_motor.unit2ind(kine, self.motor_maps)
+        t, pos, vel, ft, end_pos_ind = libsixaxff.sixaxff_c_wrapper(kine_ind, sixaxff_config)
+        
+        # Return to zero position
+        end_pos_unit = libmove_motor.ind2unit(end_pos_ind,self.motor_maps)
+        ramps_unit = libmove_motor.get_ramp_moves(end_pos_unit,
+                                                 zero_indpos_unit,
+                                                 self.move_vmax, 
+                                                 self.move_accel, 
+                                                 self.move_dt)
+        ramps_ind = libmove_motor.unit2ind(ramps_unit, self.motor_maps)
+        end_pos, ret_val = libmove_motor.outscan_kine(ramps_ind,move_motor_config,self.move_dt)
+        
+        # Reset all pwm signal to there default positions. This is a kludge to help
+        # w/ the fact that we seem to sometimes lose a bit of position in the pwm 
+        # signals. I am not sure what is causing this - hardware or software. 
+        # I will need to to some more tests after this next set of experiments.
+        clkdirpwm.set_pwm_to_default(None)
+
+        return t, pos, vel, ft
+
+    def set_zero_kine(self, T):
+        config = self.config_dict
+        dt = config['dt']
+        num_motors = self.num_motors()
+        t = scipy.arange(0.0, (T+dt)/dt)*dt
+        kine = scipy.zeros((t.shape[0],num_motors))
+        self.kine = kine
+        self.t = t
+
 #    ##############################################################################################
 #    # REPLACE WITH PITCH KINEMATICS FUNCITONS 
 #    ##############################################################################################
@@ -674,11 +690,14 @@ def read_defaults(defaults_file=BORFRC_DIR):
         raise RuntimeError, 'defaults file does not specify sensor cal file'
     if not file_dict.has_key('comedi_conf'):
         raise RuntimeError, 'defaults file does not specify comedi conf file'
+    if not file_dict.has_key('ff_conf'):
+        raise RuntimeError, 'defaults file does not specify ff_conf file'
 
     motor_maps_file = file_dict['motor_maps']
     sensor_cal_file = file_dict['sensor_cal']
     comedi_conf_file = file_dict['comedi_conf']
-    return motor_maps_file, sensor_cal_file, comedi_conf_file
+    ff_conf_file = file_dict['ff_conf']
+    return motor_maps_file, sensor_cal_file, comedi_conf_file, ff_conf_file
 
 
 def read_comedi_conf(comedi_conf_file, comedi_conf_dir=DFLT_COMEDI_CONF_DIR):
@@ -700,10 +719,81 @@ def read_comedi_conf(comedi_conf_file, comedi_conf_dir=DFLT_COMEDI_CONF_DIR):
         comedi_conf[dev_str] = {}
         for opt in config.options(dev_str):
             val = config.get(dev_str, opt)
-            if  not opt == 'dev_name':
+            if not opt == 'dev_name':
                 val = int(val)
             comedi_conf[dev_str][opt] = val
     return comedi_conf
+
+def read_ff_conf(ff_conf_file, ff_conf_dir=DFLT_FF_CONF_DIR):
+    config = ConfigParser.ConfigParser()
+    if os.path.exists(ff_conf_file):
+        config.read(ff_conf_file)
+    else:
+        ff_conf_file = os.path.join(ff_conf_dir,ff_conf_file)
+        if os.path.exists(ff_conf_file):
+            config.read(ff_conf_file)
+        else:
+            raise RuntimeError, 'ff conf file not found'
+
+    name2type_dict = {
+            'ff_motor' : 'int_list', 
+            'ff_ft' : 'int_list',
+            'ff_basic_tooltrans': 'flt_list', 
+            'ff_dynam_tooltrans' : 'int_list', 
+            'ff_mass' : 'flt_list', 
+            'ff_ind2unit': 'flt_list', 
+            'ff_axesunits': 'str_list',
+            'ff_damping': 'flt_list', 
+            'ff_flag' : 'str_list',
+            'ff_integ_type' : 'str',
+            'dt' : 'flt',
+            'startup_t': 'flt', 
+            'ain_zero_num' : 'int',
+            'ain_zero_dt': 'flt', 
+            'ain_filt_lpcut': 'flt',
+            }
+
+    ff_conf = {}
+    # Get values specified as lists a ints
+    for name, type in name2type_dict.iteritems():
+        value = config.get('ff_conf', name)
+        if type == 'int_list':
+            value = value.split(',')
+            value = tuple([int(x) for x in value])
+        elif type == 'flt_list':
+            value = value.split(',')
+            value = tuple([float(x) for x in value])
+        elif type == 'str_list':
+            value = tuple(value.split(','))
+        elif type == 'flt':
+            value = float(value)
+        elif type == 'int':
+            value = int(value)
+        elif type == 'str':
+            pass
+        else:
+            raise RuntimeError, 'unkown type'
+        ff_conf[name] = value
+
+    # Deal with ff_flags
+    def get_ff_flag(ff_flag_str):
+        if ff_flag_str == 'FF_ON':
+            rtn_val = libsixaxff.FF_ON
+        elif ff_flag_str == 'FF_OFF':
+            rtn_val =  libsixaxff.FF_OFF
+        else:
+            raise RuntimeError, 'unkown ff_flag'
+        return rtn_val
+    ff_conf['ff_flag'] = tuple([get_ff_flag(x) for x in ff_conf['ff_flag']])
+
+    # Deal with integrator type
+    if ff_conf['ff_integ_type'] == 'INTEG_RKUTTA':
+        ff_conf['ff_integ_type'] = libsixaxff.INTEG_RKUTTA
+    elif ff_conf['ff_integ_type'] == 'INTEG_EULER':
+        ff_conf['ff_integ_type'] = libsixaxff.INTEG_EULER
+    else:
+        raise RuntimeError, 'unkown ff_integ_type'
+    return ff_conf
     
 
 # Wing kinematics functions ------------------------------------------------------
@@ -1262,10 +1352,12 @@ def resample_dict(data_dict,n):
 
 if __name__ == "__main__":
 
-    run_params = {}
-    dev = Sixaxff_Base(run_params)
+    dev = Sixaxff()
+    if 0:
+        dev.print_config()
+    else:
+        kine = scipy.zeros((1000,dev.num_motors()))
+        dev.run(kine)
 
-    for k,v in dev.config_dict.iteritems():
-        print k, v
 
 
