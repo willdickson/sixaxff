@@ -1,10 +1,5 @@
-[yawff]
-motor_maps = yawff_motor_maps.conf
-sensor_cal = yawff_sensor_cal.conf
-comedi_conf = yawff_comedi.conf
-
 [sixaxff]
-motor_maps=sixaxff_motor_maps.conf
-sensor_cal=FT8652.cal
-comedi_conf=sixaxff_comedi.conf
-ff_conf =  sixaxff.conf
+motor_maps = motor_maps.conf
+sensor_cal = FT8652.cal
+comedi_conf = comedi.conf
+ff_conf =  ff.conf
