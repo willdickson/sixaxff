@@ -212,10 +212,10 @@ int sixaxff(array_t kine, config_t config, data_t data, int end_pos[])
             for (i=0; i<NUM_FF; i++) {
                 fflush_printf("p[%d]: %3.2f(%s), v[%d]: %3.2f(%s/s), ft[%d]: %s %3.2f(%s)",
                         i,
-                        status_copy.pos[i]*config.ff_ind2unit[i],
+                        status_copy.pos[i],
                         config.ff_axesunits[i],
                         i,
-                        status_copy.vel[i]*config.ff_ind2unit[i],
+                        status_copy.vel[i],
                         config.ff_axesunits[i],
                         i, 
                         FT_NAMES[config.ff_ft[i]],
@@ -986,7 +986,7 @@ int update_state(
     ///////////////////////////////////////////////////////////////////
 
 
-    // If we are inside start up wft_indow set the force feedback forces/torques to zero
+    // If we are inside start up window - set the force feedback forces/torques to zero
     if (t < (double)config.startup_t) {
         for (i=0; i<NUM_FF; i++) {
             ft_ind = config.ff_ft[i];

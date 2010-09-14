@@ -1,0 +1,8 @@
+1.0 Either save current position on exit or make sure system always returns to
+zero position regardless of how program is terminated or both. 
+
+2.0 Add home-ing routines to libmove-motor similar. 
+
+3.0 Add home-ing routines to Sixaxff class and command line.
+
+4.0 Add routine for finding axis of rotation.
