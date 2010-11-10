@@ -247,6 +247,7 @@ class Sixaxff_Base(object):
         """ 
         Move motor given by motor_name by the specified number of indices.  
         """
+
         config=self.create_config_dict(type='move_motor')
         n = self.num_motors()
         zero_pos = scipy.zeros((n,))
@@ -1212,7 +1213,7 @@ Commands:
 
     def move_by_ind(self):
         self.args.remove('move-by-ind')
-        motor_names, values = self.get_motors_and_value_from_args()
+        motor_names, values = self.get_motors_and_value_from_args(units='ind')
         if self.options_cmd['verbose'] == True:
             print 'moving motors %s by indices %s'%(motor_names,values)
         sixaxff = Sixaxff(self.run_params)
@@ -1237,18 +1238,28 @@ Commands:
         motor_names.sort()
         return motor_names
 
-    def get_motors_and_value_from_args(self):
+    def get_motors_and_value_from_args(self,units='deg'):
         motor_names = self.get_motor_names()
         motors_in_args = [x for x in self.args if x in motor_names]
         others_in_args = [x for x in self.args if x not in motor_names]
+
+        # Select conversion factor based on units type
+        if units == 'deg':
+            cfactor = DEG2RAD
+        elif units == 'ind':
+            cfactor = 1.0
+        else:
+            raise ValueError, 'unknown units value = %s'%(units,)
+
+        # Create list of values - convert as required
         if len(others_in_args) == 1:
             v_str = others_in_args[0]
-            v = DEG2RAD*self.get_float_value(v_str)
+            v = cfactor*self.get_float_value(v_str)
             values = [v]
         elif len(others_in_args) == len(motors_in_args):
             values = []
             for v_str in others_in_args:
-                v = DEG2RAD*self.get_float_value(v_str)
+                v = cfactor*self.get_float_value(v_str)
                 values.append(v)
         else:
             print 'ERROR: incorrect number of angle values -  must equal 1 or number of motor names given' 
