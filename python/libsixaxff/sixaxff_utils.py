@@ -32,6 +32,7 @@ import os.path
 import ConfigParser
 import optparse
 import libmove_motor
+import libhome_motor
 import libsixaxff
 import scipy
 import pylab
@@ -975,6 +976,14 @@ usage: %prog [options] reset-pwm
 Resets all pwm signal to their default (start-up) positions.
 """
 
+    reset_steppers_help = """\
+command: reset-steppers
+
+usage: %prog [options] reset-steppers 
+
+Resets all stepper motors to their zero position.
+"""
+
     motor_names_help = """\
 command: motor-names
 
@@ -1023,6 +1032,7 @@ Commands:
             'move2zero' : self.move2zero,
             'move-by-ind': self.move_by_ind,
             'reset-pwm': self.reset_pwm, 
+            'reset-steppers': self.reset_steppers, 
             'motor-names': self.motor_names,
             'help': self.help,
         }
@@ -1032,6 +1042,7 @@ Commands:
             'move2zero': sixaxff_cmd_line.move2zero_help,
             'move-by-ind': sixaxff_cmd_line.move_by_ind_help,
             'reset-pwm': sixaxff_cmd_line.reset_pwm_help,
+            'reset-steppers': sixaxff_cmd_line.reset_steppers_help,
             'motor-names': sixaxff_cmd_line.motor_names_help,
             'help': sixaxff_cmd_line.help_help,
         }
@@ -1130,87 +1141,19 @@ Commands:
         sixaxff.move_to_pos(motor_names, pos, noreturn = self.options_cmd['noreturn'])
 
     def zero(self):
-
-        print 
-        print 'zeroing yaw and stroke position motors'
-        print '-'*60
-        print 
-
-        print '** Step 1: adjust yaw motor until system is squared with tank'
-        print 
-        print 'At the prompt enter the angle adjustments to yaw in degrees.'
-        print "Enter 'done' when system is squared."
-
-        sixaxff = Sixaxff(self.run_params)
-        motor_names = sixaxff.get_motor_names()
-        pos = scipy.zeros((len(motor_names),))
-        sixaxff.move_to_pos(motor_names, pos,noreturn=True,at_zero_ind=True)
-        self.zero_adj_loop(sixaxff,'yaw')
-
-        print
-        print 'Rotating system by 90 degrees'
-        pos = scipy.zeros((len(motor_names),))
-        pos[sixaxff.get_motor_num('yaw')] = 90.0
-        sixaxff.move_to_pos(motor_names,pos,noreturn=True,at_zero_ind=False)
-        print 
-
-        print '** Step 2: adjust position of stroke_0 until squared with tank'
-        print
-        print 'at prompt enter the position adjustments in motor indices'
-        print "enter 'done' when wing is square"
-        self.zero_adj_loop(sixaxff, 'stroke_0')
-
-        print 
-        print 'rotating system to -180 degrees'
-        pos = scipy.zeros((len(motor_names),))
-        pos[sixaxff.get_motor_num('yaw')] = -180.0 
-        sixaxff.move_to_pos(motor_names,pos,noreturn=True,at_zero_ind=False)
-        print 
-
-        print '** Step 3: adjust position of stroke_1 until squared with tank'
-        print 
-        print 'at prompt enter position adjustments in indices'
-        print "enter 'done' when wing is square"
-        self.zero_adj_loop(sixaxff,'stroke_1')
-
-        print 
-        print 'returning to zero position'
-        pos = scipy.zeros((len(motor_names),))
-        pos[sixaxff.get_motor_num('yaw')] = 90.0 
-        sixaxff.move_to_pos(motor_names,pos,noreturn=True,at_zero_ind=False)
-
-        print 'returning RC motors to zero index position'
-        pos = libmove_motor.get_zero_indpos_deg(sixaxff.motor_maps)
-        sixaxff.move_to_pos(motor_names,pos,noreturn=True,at_zero_ind=False)
-
-    def zero_adj_loop(self, sixaxff, motor_name):
         """
-        Pitch and stroke position zeroing routine adjustment loop
+        Zeroing routine fot stepper motors
         """
-        motor_names = sixaxff.get_motor_names()
-        pos = scipy.zeros((len(motor_names),))
+        homemotor = libhome_motor.HomeMotor()
+        homemotor.cal_step_motors()
 
-        done = False
-        while not done:
-
-            print
-            ans = raw_input('adj> ')
-            if ans.lower() == 'done':
-                done = True
-                continue
-
-            try:
-                val = float(ans)
-            except ValueError:
-                print 'unable to convert entry to float - please try again'
-                continue
-
-            print val
-            pos[sixaxff.get_motor_num(motor_name)] = val
-            sixaxff.move_to_pos(motor_names,pos,noreturn=True,at_zero_ind=False)
-
-        return 
-
+    def reset_steppers(self):
+        """
+        Reset steppers to zero position.
+        """
+        homemotor = libhome_motor.HomeMotor()
+        homemotor.move_stepper_to_zero()
+       
     def move_by_ind(self):
         self.args.remove('move-by-ind')
         motor_names, values = self.get_motors_and_value_from_args(units='ind')
